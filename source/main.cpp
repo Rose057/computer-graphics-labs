@@ -26,6 +26,7 @@ GLFWwindow* glfw_window;
 int main() {
 	int status = EXIT_SUCCESS;
 
+	// инициализация GLFM
 	if (!glfwInit()) {
 		std::cerr << "Failed to initialize GLFW\n";
 		return EXIT_FAILURE;
@@ -33,6 +34,7 @@ int main() {
 
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
+	// создание окна
 	glfw_window = glfwCreateWindow(default_window_width, default_window_height,
 	                               default_window_title, nullptr, nullptr);
 	if (glfw_window == nullptr) {
@@ -40,6 +42,7 @@ int main() {
 		goto err_null_window;
 	}
 
+	// изменение размера окна
 	glfwSetFramebufferSizeCallback(glfw_window, [](GLFWwindow*, int width, int height){
 		if (width == 0 || height == 0) {
 			return;
@@ -48,6 +51,7 @@ int main() {
 		graphics::internal::resize(width, height);
 	});
 
+	// инициализация ImGUI
 	if (ImGui::CreateContext() == nullptr) {
 		std::cerr << "Failed to create ImGUI context\n";
 		status = EXIT_FAILURE;
@@ -60,33 +64,38 @@ int main() {
 		goto err_imgui_glfw_init;
 	}
 
+	// инициализация Vulkan (создание instance, device, render pass и тд)
 	if (!graphics::internal::initialize(glfw_window)) {
 		std::cerr << "Failed to initialize graphics\n";
 		status = EXIT_FAILURE;
 		goto err_graphics_init;
 	}
 
+	// инициализация приложения (создание вершинных/индексных/uniform буферов, дескрипторов, пайплайнов)
 	if (!application::initialize()) {
 		std::cerr << "Failed to initialize application\n";
 		status = EXIT_FAILURE;
 		goto err_application_init;
 	}
 
+	// главный цикл
 	while (!glfwWindowShouldClose(glfw_window)) {
-		const double time = glfwGetTime();
+		const double time = glfwGetTime(); // для анимации (время в сек от старта GLFM)
 
-		glfwPollEvents();
-		ImGui_ImplGlfw_NewFrame();
+		glfwPollEvents(); // обработка событий окна (закрытие, ввод, ресайз)
+		ImGui_ImplGlfw_NewFrame(); // сообщение о новом кадре
 
-		ImGui::NewFrame();
-		application::update(time);
-		ImGui::Render();
+		ImGui::NewFrame(); // начало нового кадра
+		application::update(time); // рисование UI, обновление матрицы в uniform-буферах
+		ImGui::Render(); // рендеринг кадра
 
+		// получение framebuffer и command buffer текущего кадра
 		graphics::internal::FrameData fd = graphics::internal::prepare();
-		application::render(fd);
-		graphics::internal::submitAndPresent();
+		application::render(fd); // запись команды отрисовки в fd.command_buffer
+		graphics::internal::submitAndPresent(); // подготовка command buffers и отправка
 	}
 
+	// очистка ресурсов
 	application::shutdown();
 err_application_init:
 	graphics::internal::shutdown();
