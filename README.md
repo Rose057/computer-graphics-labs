@@ -1,65 +1,39 @@
-# 🌋 Vulkan Starter App
+# Лабораторные работы по компьютерной графике
 
-## Getting started
+Репозиторий с лабораторными работами по курсу компьютерной графики на API Vulkan.
 
-You need C++ compiler, Vulkan SDK and CMake installed before you can build this project.
+## Лабораторная работа №1: Основы 3D-графики
 
-This project uses C++20 standard and thus requires either of those compilers:
-- GCC 10.X
-- Clang 10
-- Microsoft Visual Studio 2019
+**Вариант №6:** пирамида.
 
-This is officially tested on *Windows* and *GNU/Linux platforms*, no *macOS* support yet.
-If you have a working macOS solution of this code, consider submitting a PR so others
-can build this example code without a hassle!
+**Цель:** познакомиться с основами 3D-графики: построением простых 3D-объектов, проекцией на 2D-плоскость, а также научиться работать с матрицами перспективы, ортографической проекцией и аффинными преобразованиями.
 
-<ins>**1. Downloading the repository**</ins>
+### Выполненные задания
 
-Start by cloning the repository with `git clone --depth 1 https://github.com/vladeemerr/vulkan-starter-app`
+- **Основная часть:** отрисовка пирамиды с корректной проекцией и трансформациями.
+- **Доп. 1:** обеспечить переключение матрицы проекции (ортографическая и перспективная) в интерфейсе.
+- **Доп. 2:** добавить элементы интерфейса для изменения позиции, поворота и растяжения фигуры. 
+- **Доп. 3:** добавить возможность движения и поворота фигуры по сложной траектории, сделать элемент интерфейса для паузы и воспроизведения “анимации”, а также возможность изменять скорость “анимации” и другие параметры траектории (например радиус траектории и др.). 
+- **Доп. 4:** добавить возможность изменять цвет фигуры с помощью элементов интерфейса (в ImGUI есть ColorEdit для этого). 
+- **Доп. 5:** назначить процедурно цвета для каждой вершины, например в зависимости от позиции вершин в локальной системе координат фигуры, тогда возможность изменять цвет с помощью элементов интерфейса будет умножать выбранный цвет на цвет вершин.
+- **Доп. 6:** подумать, как можно нарисовать больше одного объекта на сцене используя больше одного набора дескрипторов (VkDescriptorSet).
 
-This repository does not contain any submodules, it utilizes CMake's `FetchContent` feature instead.
-
-<ins>**2. Configuring the project**</ins>
-
-Run either one of the CMake lines to download dependencies and configure the project:
+### Сборка (Windows)
 
 ```bash
-cmake --preset debug      # for GNU/Linux (GCC/Clang)
-cmake --preset msvc-debug # for Windows (Visual Studio 2019)
+git clone https://github.com/Rose057/vulkan-starter-app.git
+cd vulkan-starter-app
+
+# Сгенерировать проект
+cmake --preset msvc-debug
+
+# Собрать
+cmake --build build-debug --parallel
 ```
 
-If you wish to build in `release` mode, change `debug` to `release`.
-
-If changes are made (added/removed files), or if you want to regenerate project files, rerun the command above.
-
-<ins>**3. Building**</ins>
-
-To build the project, use the line below. You are most likely using `debug` preset, so
-the directory that will eventually contain your build files is named `build-debug`.
-
-Likewise for `release` that directory will be named `build-release`
-
-Run one those commands, depending on which preset you chose:
+### Запуск
 
 ```bash
-cmake --build build-debug --parallel # for debug
-cmake --build build-release --parallel # for release
+cd vulkan-starter-app
+.\build-debug\Debug\vulkan-starter-app.exe
 ```
-
-### Running
-
-`build-*` directory will contain the executable in one of the subdirectories after successful build.
-
-For `msvc-{debug|release}` builds output subdirectory is set to `Debug` or `Release` respectively.
-For other configurations output subdirectory is set to `vulkan-starter-app`.
-
-**Make sure your working directory is set to the project root!**
-Project root is where this README file resides. Otherwise, the
-code responsible for loading shaders or other resources from files will fail,
-because relative paths are used.
-
-### Compiling shaders
-
-`CMakeLists.txt` has a build recipe for compiling shader files
-along with an application. Look for a comment in this file to see
-how to compile your shaders.
