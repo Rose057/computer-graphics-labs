@@ -7,20 +7,24 @@ layout(location = 1) in vec3 in_color; // цвет вершины из буфера
 // выходной атрибут, передается во фрагментный шейдер
 layout(location = 0) out vec3 out_color; // цвет, который увидит фрагментный шейдер
 
-// Uniform-буфер
-layout(std140, set = 0, binding = 0) uniform GlobalUniforms {
+//uniform-буфер, данные всей сцены, общие для всех объектов
+layout(std140, set = 0, binding = 0) uniform SceneUniforms {
+    mat4 view;   // из мировых координат в координаты камеры
+    mat4 proj;   // из координат камеры в NDC (Normalized Device Coordinates, то, что видит GPU)
+} scene_uniforms;
+
+// Uniform-буфер, данные конкретного объекта
+layout(std140, set = 1, binding = 0) uniform ModelUniform {
     mat4 model; // из локальных координат в мировые (сдвиг, поворот, масштаб)
-    mat4 view; // из мировых координат в координаты камеры
-    mat4 proj; // из координат камеры в NDC (Normalized Device Coordinates, то, что видит GPU)
     vec3 color; // UI-цвет
     float _padding; // выравнивание (std140, 16 байт)
-} global_uniforms;
+} model_uniforms;
 
 void main() {
     // сохранение финальной позиции
-    gl_Position = global_uniforms.proj
-                * global_uniforms.view
-                * global_uniforms.model
+    gl_Position = scene_uniforms.proj
+                * scene_uniforms.view
+                * model_uniforms.model
                 * vec4(in_position, 1.0);
     // процедурный цвет: нормализация локальной позиции в [0, 1]
     // color = (position - min) / (max - min)
