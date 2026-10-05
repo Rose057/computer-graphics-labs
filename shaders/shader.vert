@@ -7,13 +7,13 @@ layout(location = 1) in vec3 in_color; // цвет вершины из буфера
 // выходной атрибут, передается во фрагментный шейдер
 layout(location = 0) out vec3 out_color; // цвет, который увидит фрагментный шейдер
 
-//uniform-буфер, данные всей сцены, общие для всех объектов
+// uniform-буфер, данные всей сцены, общие для всех объектов
 layout(std140, set = 0, binding = 0) uniform SceneUniforms {
     mat4 view;   // из мировых координат в координаты камеры
     mat4 proj;   // из координат камеры в NDC (Normalized Device Coordinates, то, что видит GPU)
 } scene_uniforms;
 
-// Uniform-буфер, данные конкретного объекта
+// uniform-буфер, данные конкретного объекта
 layout(std140, set = 1, binding = 0) uniform ModelUniform {
     mat4 model; // из локальных координат в мировые (сдвиг, поворот, масштаб)
     vec3 color; // UI-цвет

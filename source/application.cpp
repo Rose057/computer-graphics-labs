@@ -83,8 +83,10 @@ namespace application {
         };
 
         // вершинный буфер
-        // VkBuffer - это буфер на GPU
+        // VkBuffer
         VkBuffer vk_vertex_buffer = VK_NULL_HANDLE;
+        // VMA объединяет операции узнавая требования каждого буфера, выбора подходящего типа памяти, выделение памяти во VRAM,
+        // привязка к нему буферов/изображений и распределяет множество ресурсов внути крупных блоков видеопамяти.
         // запись о том, где именно лежит в памяти
         VmaAllocation vk_vertex_buffer_allocation = VK_NULL_HANDLE;
 
@@ -124,7 +126,7 @@ namespace application {
                 return false;
             }
 
-            // копирование данных пирамиды в замапленную память
+            // копирование данных пирамиды в замапленную память (память, к которой CPU имеет прямой доступ через указатель)
             // GPU видит эти данные
             std::memcpy(allocation_info.pMappedData,
                 pyramid_vertices,
@@ -211,14 +213,17 @@ namespace application {
                     .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
                 };
 
+                // выделение памяти для SceneUniforms
                 const VmaAllocationCreateInfo alloc_info = {
                     .flags = VMA_ALLOCATION_CREATE_MAPPED_BIT
                            | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
                     .usage = VMA_MEMORY_USAGE_AUTO,
                 };
 
+                // место, куда VMA положит информацию о выделенной памяти
                 VmaAllocationInfo allocation_info{};
 
+                // создание буфера и аллокации (процесс выделения памяти под буферы и др данные под использвание GPU)
                 if (vmaCreateBuffer(graphics::internal::context.allocator,
                     &buffer_info, &alloc_info,
                     &vk_scene_uniform_buffer,
@@ -232,6 +237,7 @@ namespace application {
                     static_cast<SceneUniforms*>(allocation_info.pMappedData);
 
                 // инициализация значениями по умолчанию
+                // записывает новую матрицу view в память Scene uniform-буфера
                 vk_scene_uniform_buffer_mapped->view = glm::mat4(1.0f);
                 vk_scene_uniform_buffer_mapped->proj = glm::mat4(1.0f);
             }
@@ -299,6 +305,8 @@ namespace application {
         // графический пайплайн. Описание того, как GPU рисует
         VkPipeline vk_pipeline = VK_NULL_HANDLE;
 
+        // дескриптор - описание внешнего ресурса, кот диктует его тип, место связывания (binding) в шейдере,
+        // кол-во связанных с ним ресурсов и шейдеры, где они используются.
         // создание двух дескрипторов set layout (Scene и Model), pipline layout,
         // пул дескрипторов и сами наборы: 1 Scene и N Model
         bool createDescriptors() {
@@ -311,6 +319,7 @@ namespace application {
                 .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
             };
 
+            // описывает тип внешних ресурсов и локацию связывания с объектом внешнего ресурса для использования их в шейдерах
             const VkDescriptorSetLayoutCreateInfo scene_layout_info = {
                 .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
                 .bindingCount = 1,
@@ -351,8 +360,8 @@ namespace application {
                 vk_model_descriptor_set_layout,
             };
 
-            // Pipeline Layout ссылается на descriptor set layout
-            // пайплайн через него узнает, какие ресурсы будут привязаны
+            // Pipeline Layout ссылается на наборы описателей ресурсов (descriptor set layout)
+            // пайплайн через него узнает, какие ресурсы будут привязаны нему
             const VkPipelineLayoutCreateInfo pipeline_layout_info = {
                 .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
                 .setLayoutCount = 2,
@@ -366,8 +375,7 @@ namespace application {
                 return false;
             }
 
-            // Descriptor pool
-            // сколько дескрипторов какого типа можно из него выделить
+            // Descriptor pool выделяет объекты наборов дескрипторов. Описывает макс кол-во дескрипторов и макс кол-во наборов дескрипторов, кот можно из него выделить
             // в пуле должно хватить на 1 Sceen set и object_count Model sets
             // по одному uniform-буферу на каждый объект
             const VkDescriptorPoolSize pool_size = {
@@ -389,6 +397,7 @@ namespace application {
                 return false;
             }
 
+            // выделение наборов дескрипторов по описанию
             // выделение Scene set (1 шт)
             const VkDescriptorSetAllocateInfo scene_alloc_info = {
                 .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
@@ -397,6 +406,7 @@ namespace application {
                 .pSetLayouts = &vk_scene_descriptor_set_layout,
             };
 
+            // инициализирует наборы в массиве, который указан в последнем аргументе
             if (vkAllocateDescriptorSets(graphics::internal::context.device,
                 &scene_alloc_info,
                 &vk_scene_descriptor_set) != VK_SUCCESS) {
@@ -418,46 +428,47 @@ namespace application {
                 .pSetLayouts = model_layouts,
             };
 
+            // инициализирует наборы в массике, который указан в последнем аргументе
             if (vkAllocateDescriptorSets(graphics::internal::context.device,
                 &model_alloc_info, vk_model_descriptor_sets) != VK_SUCCESS) {
                 std::cerr << "Failed to allocate descriptor sets\n";
                 return false;
             }
 
-            // привязка Scene set к Scene-буферу
+            // привязка uniform буфера к созданному набору (Scene-буфера к Scene set)
             {
                 const VkDescriptorBufferInfo buffer_info = {
-                    .buffer = vk_scene_uniform_buffer,
-                    .offset = 0,
-                    .range = sizeof(SceneUniforms),
+                    .buffer = vk_scene_uniform_buffer, // объект ресурса
+                    .offset = 0,                       // куда сместить указатель начала памяти
+                    .range = sizeof(SceneUniforms),    // размер памяти
                 };
 
                 const VkWriteDescriptorSet write = {
                     .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                    .dstSet = vk_scene_descriptor_set,
-                    .dstBinding = 0,
+                    .dstSet = vk_scene_descriptor_set, // к какому набору нужно привязать ресурс
+                    .dstBinding = 0,                   // индекс дескриптора в шейдере
                     .dstArrayElement = 0,
-                    .descriptorCount = 1,
-                    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                    .pBufferInfo = &buffer_info,
+                    .descriptorCount = 1,              // сколько ресурсов описывает дескриптор
+                    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, // тип ресурса
+                    .pBufferInfo = &buffer_info,       // адрес/массив на описание ресурсов
                 };
 
                 vkUpdateDescriptorSets(graphics::internal::context.device,
                     1, &write, 0, nullptr);
             }
 
-            // привязка каждого Model set к соответствующему Model-буферу
+            // привязка каждого Model-буфера к соответствующему Model set
             // после VkUpdateDescriptorSets шейдер увидит данные буфера
             for (uint32_t i = 0; i < object_count; ++i) {
                 const VkDescriptorBufferInfo buffer_info = {
                     .buffer = vk_model_uniform_buffers[i], // буфер
-                    .offset = 0,                     // с начала
-                    .range = sizeof(ModelUniform), // весь размер структуры
+                    .offset = 0,                           // с начала
+                    .range = sizeof(ModelUniform),         // весь размер структуры
                 };
 
                 const VkWriteDescriptorSet write = {
                     .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                    .dstSet = vk_model_descriptor_sets[i], // то, в какой нобор происходит запись
+                    .dstSet = vk_model_descriptor_sets[i], // то, в какой набор происходит запись
                     .dstBinding = 0,
                     .dstArrayElement = 0,
                     .descriptorCount = 1,
@@ -499,16 +510,16 @@ namespace application {
 
             // описание того, как читать одну вершину из вершинного буфера
             const VkVertexInputBindingDescription vertex_binding = {
-                .binding = 0,                               // индекс привязки
+                .binding = 0,                               // индекс буфера, по которому будут браться данные
                 .stride = sizeof(Vertex),                   // размер одной вершины в байтах
-                .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,   // новая вершина - на каждую вершину
+                .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,   // сдвиг указателя буфера после каждого чтения вершины
             };
 
             // описание атрибутов вершины
             const VkVertexInputAttributeDescription vertex_attributes[] = {
                 {
                     .location = 0,                          // совпадает с layout в шейдере
-                    .binding = 0,                           // индекс привязки
+                    .binding = 0,                           // индекс буфера, по которому будут браться данные
                     .format = VK_FORMAT_R32G32B32_SFLOAT,   // формат данных для атрибута вершины (vec3)
                     .offset = offsetof(Vertex, position),   // смещение внутри структуры
                 },
@@ -521,12 +532,13 @@ namespace application {
                 },
             };
 
+            // формирует примитив для вершинного шейдера
             const VkPipelineVertexInputStateCreateInfo vertex_input = {
                 .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
                 .vertexBindingDescriptionCount = 1,
-                .pVertexBindingDescriptions = &vertex_binding,
+                .pVertexBindingDescriptions = &vertex_binding, // описывает из каких буферов брать данные: размер в байтах данных для 1 примитива и индексы привязки буферов
                 .vertexAttributeDescriptionCount = 2,
-                .pVertexAttributeDescriptions = vertex_attributes,
+                .pVertexAttributeDescriptions = vertex_attributes, // описывает атрибуты и вершины: их типы данных, из какого юуфера брать значения, индексы объявления в вершинном шейдере
             };
 
             // список треугольников. То, как собирать примитивы
@@ -550,7 +562,7 @@ namespace application {
                 .rasterizerDiscardEnable = VK_FALSE,    // примитивы не отбрасываются
                 .polygonMode = VK_POLYGON_MODE_FILL,    // залитые треугольники
                 .cullMode = VK_CULL_MODE_BACK_BIT,      // отсечение задних граней
-                .frontFace = VK_FRONT_FACE_CLOCKWISE,   // лицевая грань - по часовой
+                .frontFace = VK_FRONT_FACE_CLOCKWISE,   // обход треугольника для вектор. произв., чтобы показывать ту сторону, кот повернута к нам и не показ ту, кот отвернута (лицевая грань - по часовой)
                 .depthBiasEnable = VK_FALSE,
                 .lineWidth = 1.0f,
             };
@@ -566,9 +578,9 @@ namespace application {
             // задние грани не перекрывают передние
             const VkPipelineDepthStencilStateCreateInfo depth_stencil = {
                 .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-                .depthTestEnable = VK_TRUE,
-                .depthWriteEnable = VK_TRUE,
-                .depthCompareOp = VK_COMPARE_OP_LESS,
+                .depthTestEnable = VK_TRUE, // не игнорировать ли проверку глубины перед закрашиванием
+                .depthWriteEnable = VK_TRUE, // можно ли записать значение глубины, если проверка пройдена
+                .depthCompareOp = VK_COMPARE_OP_LESS, // оператор сравнения глубины
                 .depthBoundsTestEnable = VK_FALSE,
                 .stencilTestEnable = VK_FALSE,
             };
@@ -591,8 +603,8 @@ namespace application {
 
             // динамические состояния: viewport и scissor задаются в render
             const VkDynamicState dynamic_states[] = {
-                VK_DYNAMIC_STATE_VIEWPORT,
-                VK_DYNAMIC_STATE_SCISSOR,
+                VK_DYNAMIC_STATE_VIEWPORT, // размер рисуемой области
+                VK_DYNAMIC_STATE_SCISSOR, // размер вырезаемой области
             };
 
             const VkPipelineDynamicStateCreateInfo dynamic_state = {
@@ -751,10 +763,6 @@ namespace application {
         if (is_playing) {
             // рост угла пропорционален времени и скорости
             anim_angle += float(delta) * anim_speed;
-            // угол от 0 до 2pi
-            if (anim_angle > 2.0f * 3.14159265f) {
-                anim_angle -= 2.0f * 3.14159265f;
-            }
         }
 
         // UI (ImGUI)
@@ -808,7 +816,7 @@ namespace application {
         glm::vec3 final_position = manual_position;
         final_position.x += anim_radius * std::cos(anim_angle);
         final_position.z += anim_radius * std::sin(anim_angle);
-        final_position.y += anim_height;
+        final_position.y += anim_height + std::sin(anim_angle * 1.5f) * 0.3f;
 
         // сдвиг в финальную позицию
         model = glm::translate(model, final_position); 
@@ -860,20 +868,40 @@ namespace application {
         vk_model_uniform_buffers_mapped[0]->model = model;
         vk_model_uniform_buffers_mapped[0]->color = color;
 
-        // объект 1 — статичный
-        glm::mat4 model1 = glm::mat4(1.0f);
-        model1 = glm::translate(model1, glm::vec3(-2.0f, 0.0f, 0.0f)); // сдвиг влево на 2
-        model1 = glm::rotate(model1, glm::radians(45.0f), glm::vec3(0, 1, 0)); // поворот на 45 вокруг Y
-        vk_model_uniform_buffers_mapped[1]->model = model1;
-        vk_model_uniform_buffers_mapped[1]->color = glm::vec3(1.0f, 0.5f, 0.2f);
 
-        // Объект 2 — статичный
+
+        // объект 1, вращение на месте и колебания по высоте
+        glm::mat4 model1 = glm::mat4(1.0f);
+
+        // находится левее центра (-2.0), а по Y плавно колеблется
+        glm::vec3 pos1 = glm::vec3(-2.0f, std::sin(anim_angle * 1.5f) * 0.3f, 0.0f);
+        model1 = glm::translate(model1, pos1);
+        // непрерывное вращение вокруг оси Y в противоположную сторону (-anim_angle)
+        model1 = glm::rotate(model1, anim_angle * 1.2f, glm::vec3(0.0f, 1.0f, 0.0f));
+        // легкое покачивание по оси X для динамики
+        model1 = glm::rotate(model1, std::cos(anim_angle) * 0.2f, glm::vec3(1.0f, 0.0f, 0.0f));
+        // объект уменьшен в размере
+        model1 = glm::scale(model1, glm::vec3(0.6f));
+
+        vk_model_uniform_buffers_mapped[1]->model = model1;
+        vk_model_uniform_buffers_mapped[1]->color = glm::vec3(1.0f, 0.5f, 0.2f); // оранжевый цвет
+
+
+        // объект 2, вращение на месте и колебания по высоте
         glm::mat4 model2 = glm::mat4(1.0f);
-        model2 = glm::translate(model2, glm::vec3(2.0f, 0.0f, 0.0f)); // сдвиг вправо на 2
-        model2 = glm::rotate(model2, glm::radians(-30.0f), glm::vec3(0, 1, 0)); // поворот на -30
-        model2 = glm::scale(model2, glm::vec3(0.6f)); // уменьшение в 6 раз
+
+        // находится правее центра (2.0), а по Y плавно колеблется
+        glm::vec3 pos2 = glm::vec3(2.0f, std::sin(anim_angle * 1.5f) * 0.3f, 0.0f);
+        model2 = glm::translate(model2, pos2);
+        // непрерывное вращение вокруг оси Y в противоположную сторону (-anim_angle)
+        model2 = glm::rotate(model2, anim_angle * 1.2f, glm::vec3(0.0f, 1.0f, 0.0f));
+        // легкое покачивание по оси X для динамики
+        model2 = glm::rotate(model2, std::cos(anim_angle) * 0.2f, glm::vec3(1.0f, 0.0f, 0.0f));
+        // объект уменьшен в размере
+        model2 = glm::scale(model2, glm::vec3(0.6f));
+
         vk_model_uniform_buffers_mapped[2]->model = model2;
-        vk_model_uniform_buffers_mapped[2]->color = glm::vec3(0.2f, 0.5f, 1.0f);
+        vk_model_uniform_buffers_mapped[2]->color = glm::vec3(0.2f, 0.5f, 1.0f); // голубой цвет
 
         // ImGui::ShowDemoWindow();
     }
@@ -895,24 +923,24 @@ namespace application {
 
         // значения очистки
         const VkClearValue clear_values[] = {
-            {.color = {.float32 = { 0.1f, 0.1f, 0.1f, 1.0f } } },
-            {.depthStencil = { 1.0f, 0 } },
+            {.color = {.float32 = { 0.1f, 0.1f, 0.1f, 1.0f } } }, // изображение №1: цветное, выставление RGBA во float
+            {.depthStencil = { 1.0f, 0 } }, // изображение №2: глубина, выставление float=1, очень далеко, второй параметр - stencil, он равен 0
         };
 
         // начало render pass (определение ресурсов для рендеринга, их обработка и определение операций)
         const VkRenderPassBeginInfo render_pass_begin = {
             .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-            .renderPass = graphics::internal::context.render_pass, // выбор render pass
-            .framebuffer = fd.framebuffer, // в какой framebuffer рисовать
-            .renderArea = {.extent = graphics::internal::context.swapchain_extent }, // область рисования - размер окна
+            .renderPass = graphics::internal::context.render_pass, // выбор render pass (какой объект для отрисовки используется)
+            .framebuffer = fd.framebuffer, // в какой framebuffer (контейнер изображений) рисовать
+            .renderArea = {.extent = graphics::internal::context.swapchain_extent }, // размер изображений, область рисования - размер окна
             .clearValueCount = sizeof(clear_values) / sizeof(clear_values[0]),
             .pClearValues = clear_values,
         };
 
-        // начало render pass
+        // начало render pass, начинаем рисовать
         vkCmdBeginRenderPass(fd.command_buffer, &render_pass_begin, VK_SUBPASS_CONTENTS_INLINE);
 
-        // динамические viewpoint и scissor
+        // динамические viewpoint и scissor, задаем значения областей отрисовки и рисования
         // Viewport - прямоугольник, куда будет отображаться NDC
         const VkViewport viewport = {
             .x = 0.0f, .y = 0.0f, // левый верхний угол
@@ -929,7 +957,7 @@ namespace application {
         vkCmdSetViewport(fd.command_buffer, 0, 1, &viewport);
         vkCmdSetScissor(fd.command_buffer, 0, 1, &scissor);
 
-        // привязка общих ресурсов
+        // привязка общих ресурсов, задаем текущим новый графический конвейер (привязка набора дескрипторов к конвейеру)
         // пайплайн, вершинный и индексный буферы общие для всех объектов
         // установка пайплайна. GPU знает, как рисовать
         vkCmdBindPipeline(fd.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_pipeline);
