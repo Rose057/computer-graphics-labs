@@ -741,16 +741,44 @@ namespace application {
 
         // состояние, сохраняется между кадрами, переменные не сбрасываются каждый кадр
         static int projection_mode = 0; // 0 = перспективная, 1 = ортографическая
-        static glm::vec3 manual_position = glm::vec3(0.0f); // ручное смещение объекта 0, прибавляется к анимационному
-        static glm::vec3 manual_rotation = glm::vec3(0.0f); // ручной поворот объекта 0 в градусах
-        static glm::vec3 scale = glm::vec3(1.0f); // масштаб объекта 0
-        static glm::vec3 color = glm::vec3(1.0f); // UI-цвет объекта 0, белый не меняет процедурный
+
+        // какой объект сейчас выбран в UI (0, 1 или 2)
+        static int selected_object = 0;
+
+        // массивы параметров индивидуально для каждого из 3 объектов
+        // смещение объектов
+        static glm::vec3 manual_position[object_count] = {
+            glm::vec3(0.0f, 0.0f, 0.0f),  // объект 0
+            glm::vec3(-2.0f, 0.0f, 0.0f), // объект 1 (начальный сдвиг влево на 2)
+            glm::vec3(2.0f, 0.0f, 0.0f)   // объект 2 (начальный сдвиг вправо на 2)
+        };
+
+        // поворот объектов
+        static glm::vec3 manual_rotation[object_count] = {
+            glm::vec3(0.0f),
+            glm::vec3(0.0f, 45.0f, 0.0f),
+            glm::vec3(0.0f, -30.0f, 0.0f)
+        };
+
+        // масштаб объектов
+        static glm::vec3 scale[object_count] = {
+            glm::vec3(1.0f),
+            glm::vec3(0.8f),
+            glm::vec3(0.6f)
+        };
+
+        // UI-цвет объектов
+        static glm::vec3 color[object_count] = {
+            glm::vec3(1.0f, 1.0f, 1.0f), // объект 0 — белый
+            glm::vec3(1.0f, 0.5f, 0.2f), // объект 1 — оранжевый
+            glm::vec3(0.2f, 0.5f, 1.0f)  // объект 2 — синий
+        };
 
         // состояние анимации
         static bool  is_playing = true;   // идет ли анимация
         static float anim_speed = 1.0f;   // скорость анимации
-        static float anim_radius = 1.5f;  // радиус траектории
-        static float anim_height = 0.3f;  // высота траектории по Y
+        static float anim_radius = 0.6f;  // радиус траектории
+        static float anim_height = 0.0f;  // высота траектории по Y
         static float anim_angle = 0.0f;   // текущий угол на траектории
 
         // deltaTime, разница времени между текущим и прерыдущим кадром
@@ -768,6 +796,16 @@ namespace application {
         // UI (ImGUI)
         ImGui::Begin("Controls"); // открытие окна с заголовком "Controls"
 
+        // выбор объекта для редактирования
+        ImGui::Text("Select Pyramid:");
+        ImGui::RadioButton("Pyramid 0", &selected_object, 0);
+        ImGui::SameLine();
+        ImGui::RadioButton("Pyramid 1", &selected_object, 1);
+        ImGui::SameLine();
+        ImGui::RadioButton("Pyramid 2", &selected_object, 2);
+
+        ImGui::Separator();
+
         // проекция
         ImGui::Text("Projection:");
         ImGui::RadioButton("Perspective", &projection_mode, 0);
@@ -775,16 +813,18 @@ namespace application {
         ImGui::RadioButton("Orthographic", &projection_mode, 1);
 
         ImGui::Separator();
-        // трансформации
-        ImGui::Text("Manual transforms:");
-        ImGui::SliderFloat3("Position", &manual_position.x, -3.0f, 3.0f); // сдвиг
-        ImGui::SliderFloat3("Rotation", &manual_rotation.x, -180.0f, 180.0f); // поворот
-        ImGui::SliderFloat3("Scale", &scale.x, 0.1f, 3.0f); // масштаб
+
+        // трансформации, выставляются для выбранного объекта
+        ImGui::Text("Manual transforms (Pyramid %d):", selected_object);
+        ImGui::SliderFloat3("Position", &manual_position[selected_object].x, -5.0f, 5.0f); // сдвиг
+        ImGui::SliderFloat3("Rotation", &manual_rotation[selected_object].x, -180.0f, 180.0f); // поворот
+        ImGui::SliderFloat3("Scale", &scale[selected_object].x, 0.1f, 3.0f); // масштаб
 
         ImGui::Separator();
-        // цвет
+
+        // цвет для выбранного объекта
         ImGui::Text("Color:");
-        ImGui::ColorEdit3("Base color", &color.x); // палитра цветов, меняет color
+        ImGui::ColorEdit3("Base color", &color[selected_object].x);
 
         ImGui::Separator();
         // анимация
@@ -805,31 +845,8 @@ namespace application {
         ImGui::SliderFloat("Speed", &anim_speed, -3.0f, 3.0f); // скорость анимации
         ImGui::SliderFloat("Radius", &anim_radius, 0.0f, 3.0f); // радиус траектории
         ImGui::SliderFloat("Height", &anim_height, -1.0f, 1.0f); // высота траектории
-        ImGui::Text("Angle: %.2f rad", anim_angle); // текущий угол
 
         ImGui::End(); // закрытие окна
-
-        // Model-матрица (для 0 объекта)
-        glm::mat4 model = glm::mat4(1.0f); // изначально нет преобразований
-
-        // финальная позиция
-        glm::vec3 final_position = manual_position;
-        final_position.x += anim_radius * std::cos(anim_angle);
-        final_position.z += anim_radius * std::sin(anim_angle);
-        final_position.y += anim_height + std::sin(anim_angle * 1.5f) * 0.3f;
-
-        // сдвиг в финальную позицию
-        model = glm::translate(model, final_position); 
-
-        // поворот вокруг X
-        model = glm::rotate(model, glm::radians(manual_rotation.x), glm::vec3(1, 0, 0)); 
-        // поворот вокруг Y, фигура крутится вокруг своей оси в 2 раза быстрее
-        model = glm::rotate(model, glm::radians(manual_rotation.y) + anim_angle * 2.0f, glm::vec3(0, 1, 0));
-        // поворот вокруг Z
-        model = glm::rotate(model, glm::radians(manual_rotation.z), glm::vec3(0, 0, 1));
-
-        // масштаб по всем осям
-        model = glm::scale(model, scale);
 
         // View-матрица, общая для всех объектов
         glm::mat4 view = glm::lookAt(
@@ -862,49 +879,40 @@ namespace application {
         vk_scene_uniform_buffer_mapped->view = view;
         vk_scene_uniform_buffer_mapped->proj = proj;
 
-        // заполнение Model-буферов (свои для каждого объекта)
-        // model и color свои у каждого объекта
-        // объект 0 — управляемый (UI и анимация)
-        vk_model_uniform_buffers_mapped[0]->model = model;
-        vk_model_uniform_buffers_mapped[0]->color = color;
+        // расчет и запись для каждого объекта
+        for (int i = 0; i < object_count; ++i) {
+            glm::mat4 model = glm::mat4(1.0f); // изначально нет преобразований
+
+            // итоговая позиция = ручное положение + движение по траектории
+            glm::vec3 final_position = manual_position[i];
+
+            // круговое движение для анимации
+            // смещение по фазе, чтобы фигуры не летали друг в друге
+            float phase_angle = anim_angle + float(i) * 2.094f; // 120 градусов
+            final_position.x += anim_radius * std::cos(phase_angle);
+            final_position.z += anim_radius * std::sin(phase_angle);
+            // плавные вертикальные колебания по Y
+            float wave_amplitude = 0.3f; // амплитуда колебаний по высоте
+            final_position.y += anim_height + wave_amplitude * std::sin(phase_angle * 2.0f);
+
+            // сдвиг в финальную позицию
+            model = glm::translate(model, final_position);
+
+            // повороты вокруг X, Y, Z, (вокруг Y в 2 раза быстрее)
+            model = glm::rotate(model, glm::radians(manual_rotation[i].x), glm::vec3(1.0f, 0.0f, 0.0f));
+            model = glm::rotate(model, glm::radians(manual_rotation[i].y) + anim_angle * 2.0f, glm::vec3(0.0f, 1.0f, 0.0f));
+            model = glm::rotate(model, glm::radians(manual_rotation[i].z), glm::vec3(0.0f, 0.0f, 1.0f));
+
+            // масштабирование по всем осям
+            model = glm::scale(model, scale[i]);
 
 
-
-        // объект 1, вращение на месте и колебания по высоте
-        glm::mat4 model1 = glm::mat4(1.0f);
-
-        // находится левее центра (-2.0), а по Y плавно колеблется
-        glm::vec3 pos1 = glm::vec3(-2.0f, std::sin(anim_angle * 1.5f) * 0.3f, 0.0f);
-        model1 = glm::translate(model1, pos1);
-        // непрерывное вращение вокруг оси Y в противоположную сторону (-anim_angle)
-        model1 = glm::rotate(model1, anim_angle * 1.2f, glm::vec3(0.0f, 1.0f, 0.0f));
-        // легкое покачивание по оси X для динамики
-        model1 = glm::rotate(model1, std::cos(anim_angle) * 0.2f, glm::vec3(1.0f, 0.0f, 0.0f));
-        // объект уменьшен в размере
-        model1 = glm::scale(model1, glm::vec3(0.6f));
-
-        vk_model_uniform_buffers_mapped[1]->model = model1;
-        vk_model_uniform_buffers_mapped[1]->color = glm::vec3(1.0f, 0.5f, 0.2f); // оранжевый цвет
-
-
-        // объект 2, вращение на месте и колебания по высоте
-        glm::mat4 model2 = glm::mat4(1.0f);
-
-        // находится правее центра (2.0), а по Y плавно колеблется
-        glm::vec3 pos2 = glm::vec3(2.0f, std::sin(anim_angle * 1.5f) * 0.3f, 0.0f);
-        model2 = glm::translate(model2, pos2);
-        // непрерывное вращение вокруг оси Y в противоположную сторону (-anim_angle)
-        model2 = glm::rotate(model2, anim_angle * 1.2f, glm::vec3(0.0f, 1.0f, 0.0f));
-        // легкое покачивание по оси X для динамики
-        model2 = glm::rotate(model2, std::cos(anim_angle) * 0.2f, glm::vec3(1.0f, 0.0f, 0.0f));
-        // объект уменьшен в размере
-        model2 = glm::scale(model2, glm::vec3(0.6f));
-
-        vk_model_uniform_buffers_mapped[2]->model = model2;
-        vk_model_uniform_buffers_mapped[2]->color = glm::vec3(0.2f, 0.5f, 1.0f); // голубой цвет
-
-        // ImGui::ShowDemoWindow();
-    }
+            // заполнение Model-буферов (свои для каждого объекта)
+            // model и color свои у каждого объекта
+            vk_model_uniform_buffers_mapped[i]->model = model;
+            vk_model_uniform_buffers_mapped[i]->color = color[i];
+        }
+}
 
 
     // рендер (что и как отрисовывается в текущем кадре)

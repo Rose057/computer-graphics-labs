@@ -26,7 +26,6 @@ void main() {
                 * scene_uniforms.view
                 * model_uniforms.model
                 * vec4(in_position, 1.0);
-    // процедурный цвет: нормализация локальной позиции в [0, 1]
-    // color = (position - min) / (max - min)
-    out_color = (in_position + vec3(0.5, 0.0, 0.5)) / vec3(1.0, 0.7, 1.0);
+    // процедурный цвет
+    out_color = in_position + vec3(0.5);
 }
