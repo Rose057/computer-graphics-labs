@@ -5,16 +5,16 @@
 #include <glm/glm.hpp>
 
 namespace application {
-    // данные одной вершины
     struct Vertex {
-        glm::vec3 position; // локальная позиция x, y, z
-        glm::vec3 color; // цвет
+        glm::vec3 position;
+        glm::vec3 color;
+        glm::vec3 normal;
     };
 
-    bool initialize(); // создает все ресурсы
-    void shutdown(); // уничтожает все созданные ресурсы
+    bool initialize();
+    void shutdown();
 
-    void update(double time); // вызывает каждый кадр до отрисовки (для UI и матриц)
-    void render(const graphics::internal::FrameData& fd); // вызывается каждый кадр после update, для команд отрисовки
+    void update(double time);
+    void render(const graphics::internal::FrameData& fd); 
 
 } // namespace application
