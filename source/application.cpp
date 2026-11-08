@@ -5,6 +5,9 @@
 
 #include <cstring>
 #include <iostream>
+#include <cstdio>
+
+#include <GLFW/glfw3.h>
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -67,72 +70,106 @@ namespace application {
         float _padding0;
         glm::vec3 specular;
         float alpha;
-        float is_gizmo;
         float _padding1;
         float _padding2;
         float _padding3;
+        float _padding4;
     };
+
+    std::vector<Vertex> floor_vertices = {
+        { {-5.0f, 0.0f, -5.0f}, {1,1,1}, {0, 1, 0}, {0.0f, 0.0f} },
+        { { 5.0f, 0.0f, -5.0f}, {1,1,1}, {0, 1, 0}, {5.0f, 0.0f} },
+        { { 5.0f, 0.0f,  5.0f}, {1,1,1}, {0, 1, 0}, {5.0f, 5.0f} },
+        { {-5.0f, 0.0f,  5.0f}, {1,1,1}, {0, 1, 0}, {0.0f, 5.0f} },
+    };
+    std::vector<uint32_t> floor_indices = { 0, 1, 2, 0, 2, 3 };
+
+    std::vector<Vertex> wall_vertices = {
+        { {-5.0f, 0.0f, -5.0f}, {1,1,1}, {0, 0, 1}, {0.0f, 5.0f} },
+        { { 5.0f, 0.0f, -5.0f}, {1,1,1}, {0, 0, 1}, {5.0f, 5.0f} },
+        { { 5.0f, 5.0f, -5.0f}, {1,1,1}, {0, 0, 1}, {5.0f, 0.0f} },
+        { {-5.0f, 5.0f, -5.0f}, {1,1,1}, {0, 0, 1}, {0.0f, 0.0f} },
+    };
+    std::vector<uint32_t> wall_indices = { 0, 2, 1, 0, 3, 2 };
 
     namespace {
         std::vector<Vertex> pyramid_vertices = {
-            { {  0.0f,  0.7f,  0.0f }, { 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f } },
-            { { -0.5f,  0.0f, -0.5f }, { 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f } },
-            { {  0.5f,  0.0f, -0.5f }, { 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f } },
-            { {  0.5f,  0.0f,  0.5f }, { 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f } },
-            { { -0.5f,  0.0f,  0.5f }, { 1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 0.0f } },
+            { {  0.0f,  0.7f,  0.0f }, {1,1,1}, {0,0,0}, {0.5f, 0.0f} },
+            { { -0.5f,  0.0f, -0.5f }, {1,1,1}, {0,0,0}, {0.0f, 1.0f} },
+            { {  0.5f,  0.0f, -0.5f }, {1,1,1}, {0,0,0}, {1.0f, 1.0f} },
+
+            { {  0.0f,  0.7f,  0.0f }, {1,1,1}, {0,0,0}, {0.5f, 0.0f} },
+            { {  0.5f,  0.0f, -0.5f }, {1,1,1}, {0,0,0}, {0.0f, 1.0f} },
+            { {  0.5f,  0.0f,  0.5f }, {1,1,1}, {0,0,0}, {1.0f, 1.0f} },
+
+            { {  0.0f,  0.7f,  0.0f }, {1,1,1}, {0,0,0}, {0.5f, 0.0f} },
+            { {  0.5f,  0.0f,  0.5f }, {1,1,1}, {0,0,0}, {0.0f, 1.0f} },
+            { { -0.5f,  0.0f,  0.5f }, {1,1,1}, {0,0,0}, {1.0f, 1.0f} },
+
+            { {  0.0f,  0.7f,  0.0f }, {1,1,1}, {0,0,0}, {0.5f, 0.0f} },
+            { { -0.5f,  0.0f,  0.5f }, {1,1,1}, {0,0,0}, {0.0f, 1.0f} },
+            { { -0.5f,  0.0f, -0.5f }, {1,1,1}, {0,0,0}, {1.0f, 1.0f} },
+
+            { { -0.5f,  0.0f, -0.5f }, {1,1,1}, {0,-1,0}, {0.0f, 0.0f} },
+            { {  0.5f,  0.0f,  0.5f }, {1,1,1}, {0,-1,0}, {1.0f, 1.0f} },
+            { {  0.5f,  0.0f, -0.5f }, {1,1,1}, {0,-1,0}, {1.0f, 0.0f} },
+
+            { { -0.5f,  0.0f, -0.5f }, {1,1,1}, {0,-1,0}, {0.0f, 0.0f} },
+            { { -0.5f,  0.0f,  0.5f }, {1,1,1}, {0,-1,0}, {0.0f, 1.0f} },
+            { {  0.5f,  0.0f,  0.5f }, {1,1,1}, {0,-1,0}, {1.0f, 1.0f} },
         };
 
         std::vector<uint32_t> pyramid_indices = {
             0, 1, 2,
-            0, 2, 3,
-            0, 3, 4,
-            0, 4, 1,
-            1, 3, 2,
-            1, 4, 3,
+            3, 4, 5,
+            6, 7, 8,
+            9, 10, 11,
+            12, 13, 14,
+            15, 16, 17,
         };
 
         std::vector<Vertex> cube_vertices = {
-            { {-0.5f, -0.5f,  0.5f}, {1,1,1}, { 0,  0,  1} },
-            { { 0.5f, -0.5f,  0.5f}, {1,1,1}, { 0,  0,  1} },
-            { { 0.5f,  0.5f,  0.5f}, {1,1,1}, { 0,  0,  1} },
-            { {-0.5f, -0.5f,  0.5f}, {1,1,1}, { 0,  0,  1} },
-            { { 0.5f,  0.5f,  0.5f}, {1,1,1}, { 0,  0,  1} },
-            { {-0.5f,  0.5f,  0.5f}, {1,1,1}, { 0,  0,  1} },
+            { {-0.5f, -0.5f,  0.5f}, {1,1,1}, { 0,  0,  1}, {0,1} },
+            { { 0.5f, -0.5f,  0.5f}, {1,1,1}, { 0,  0,  1}, {1,1} },
+            { { 0.5f,  0.5f,  0.5f}, {1,1,1}, { 0,  0,  1}, {1,0} },
+            { {-0.5f, -0.5f,  0.5f}, {1,1,1}, { 0,  0,  1}, {0,1} },
+            { { 0.5f,  0.5f,  0.5f}, {1,1,1}, { 0,  0,  1}, {1,0} },
+            { {-0.5f,  0.5f,  0.5f}, {1,1,1}, { 0,  0,  1}, {0,0} },
 
-            { { 0.5f, -0.5f, -0.5f}, {1,1,1}, { 0,  0, -1} },
-            { {-0.5f, -0.5f, -0.5f}, {1,1,1}, { 0,  0, -1} },
-            { {-0.5f,  0.5f, -0.5f}, {1,1,1}, { 0,  0, -1} },
-            { { 0.5f, -0.5f, -0.5f}, {1,1,1}, { 0,  0, -1} },
-            { {-0.5f,  0.5f, -0.5f}, {1,1,1}, { 0,  0, -1} },
-            { { 0.5f,  0.5f, -0.5f}, {1,1,1}, { 0,  0, -1} },
+            { { 0.5f, -0.5f, -0.5f}, {1,1,1}, { 0,  0, -1}, {0,1} },
+            { {-0.5f, -0.5f, -0.5f}, {1,1,1}, { 0,  0, -1}, {1,1} },
+            { {-0.5f,  0.5f, -0.5f}, {1,1,1}, { 0,  0, -1}, {1,0} },
+            { { 0.5f, -0.5f, -0.5f}, {1,1,1}, { 0,  0, -1}, {0,1} },
+            { {-0.5f,  0.5f, -0.5f}, {1,1,1}, { 0,  0, -1}, {1,0} },
+            { { 0.5f,  0.5f, -0.5f}, {1,1,1}, { 0,  0, -1}, {0,0} },
 
-            { {-0.5f, -0.5f, -0.5f}, {1,1,1}, {-1,  0,  0} },
-            { {-0.5f, -0.5f,  0.5f}, {1,1,1}, {-1,  0,  0} },
-            { {-0.5f,  0.5f,  0.5f}, {1,1,1}, {-1,  0,  0} },
-            { {-0.5f, -0.5f, -0.5f}, {1,1,1}, {-1,  0,  0} },
-            { {-0.5f,  0.5f,  0.5f}, {1,1,1}, {-1,  0,  0} },
-            { {-0.5f,  0.5f, -0.5f}, {1,1,1}, {-1,  0,  0} },
+            { {-0.5f, -0.5f, -0.5f}, {1,1,1}, {-1,  0,  0}, {0,1} },
+            { {-0.5f, -0.5f,  0.5f}, {1,1,1}, {-1,  0,  0}, {1,1} },
+            { {-0.5f,  0.5f,  0.5f}, {1,1,1}, {-1,  0,  0}, {1,0} },
+            { {-0.5f, -0.5f, -0.5f}, {1,1,1}, {-1,  0,  0}, {0,1} },
+            { {-0.5f,  0.5f,  0.5f}, {1,1,1}, {-1,  0,  0}, {1,0} },
+            { {-0.5f,  0.5f, -0.5f}, {1,1,1}, {-1,  0,  0}, {0,0} },
 
-            { { 0.5f, -0.5f,  0.5f}, {1,1,1}, { 1,  0,  0} },
-            { { 0.5f, -0.5f, -0.5f}, {1,1,1}, { 1,  0,  0} },
-            { { 0.5f,  0.5f, -0.5f}, {1,1,1}, { 1,  0,  0} },
-            { { 0.5f, -0.5f,  0.5f}, {1,1,1}, { 1,  0,  0} },
-            { { 0.5f,  0.5f, -0.5f}, {1,1,1}, { 1,  0,  0} },
-            { { 0.5f,  0.5f,  0.5f}, {1,1,1}, { 1,  0,  0} },
+            { { 0.5f, -0.5f,  0.5f}, {1,1,1}, { 1,  0,  0}, {0,1} },
+            { { 0.5f, -0.5f, -0.5f}, {1,1,1}, { 1,  0,  0}, {1,1} },
+            { { 0.5f,  0.5f, -0.5f}, {1,1,1}, { 1,  0,  0}, {1,0} },
+            { { 0.5f, -0.5f,  0.5f}, {1,1,1}, { 1,  0,  0}, {0,1} },
+            { { 0.5f,  0.5f, -0.5f}, {1,1,1}, { 1,  0,  0}, {1,0} },
+            { { 0.5f,  0.5f,  0.5f}, {1,1,1}, { 1,  0,  0}, {0,0} },
 
-            { {-0.5f,  0.5f,  0.5f}, {1,1,1}, { 0,  1,  0} },
-            { { 0.5f,  0.5f,  0.5f}, {1,1,1}, { 0,  1,  0} },
-            { { 0.5f,  0.5f, -0.5f}, {1,1,1}, { 0,  1,  0} },
-            { {-0.5f,  0.5f,  0.5f}, {1,1,1}, { 0,  1,  0} },
-            { { 0.5f,  0.5f, -0.5f}, {1,1,1}, { 0,  1,  0} },
-            { {-0.5f,  0.5f, -0.5f}, {1,1,1}, { 0,  1,  0} },
+            { {-0.5f,  0.5f,  0.5f}, {1,1,1}, { 0,  1,  0}, {0,1} },
+            { { 0.5f,  0.5f,  0.5f}, {1,1,1}, { 0,  1,  0}, {1,1} },
+            { { 0.5f,  0.5f, -0.5f}, {1,1,1}, { 0,  1,  0}, {1,0} },
+            { {-0.5f,  0.5f,  0.5f}, {1,1,1}, { 0,  1,  0}, {0,1} },
+            { { 0.5f,  0.5f, -0.5f}, {1,1,1}, { 0,  1,  0}, {1,0} },
+            { {-0.5f,  0.5f, -0.5f}, {1,1,1}, { 0,  1,  0}, {0,0} },
 
-            { {-0.5f, -0.5f, -0.5f}, {1,1,1}, { 0, -1,  0} },
-            { { 0.5f, -0.5f, -0.5f}, {1,1,1}, { 0, -1,  0} },
-            { { 0.5f, -0.5f,  0.5f}, {1,1,1}, { 0, -1,  0} },
-            { {-0.5f, -0.5f, -0.5f}, {1,1,1}, { 0, -1,  0} },
-            { { 0.5f, -0.5f,  0.5f}, {1,1,1}, { 0, -1,  0} },
-            { {-0.5f, -0.5f,  0.5f}, {1,1,1}, { 0, -1,  0} },
+            { {-0.5f, -0.5f, -0.5f}, {1,1,1}, { 0, -1,  0}, {0,1} },
+            { { 0.5f, -0.5f, -0.5f}, {1,1,1}, { 0, -1,  0}, {1,1} },
+            { { 0.5f, -0.5f,  0.5f}, {1,1,1}, { 0, -1,  0}, {1,0} },
+            { {-0.5f, -0.5f, -0.5f}, {1,1,1}, { 0, -1,  0}, {0,1} },
+            { { 0.5f, -0.5f,  0.5f}, {1,1,1}, { 0, -1,  0}, {1,0} },
+            { {-0.5f, -0.5f,  0.5f}, {1,1,1}, { 0, -1,  0}, {0,0} },
         };
 
         std::vector<uint32_t> cube_indices = {
@@ -144,11 +181,39 @@ namespace application {
             30, 31, 32, 33, 34, 35,
         };
 
-        constexpr uint32_t object_count = 3;
+        constexpr uint32_t object_count = 6;
 
         constexpr uint32_t max_cone_vertices = 512;
 
-        bool show_gizmos = true;
+        struct PushConst {
+            float time;
+            float enable;
+        };
+        static float app_time = 0.0f;
+
+        bool global_effect_enabled = true;
+
+        uint32_t dynamic_ubo_alignment = 256;
+        uint32_t model_uniform_stride = 0;
+
+        constexpr uint32_t max_textures = 16;
+        uint32_t texture_count = 0;
+        graphics::GpuTexture textures[max_textures];
+
+        VkDescriptorSet vk_texture_descriptor_sets[max_textures] = {};
+        VkDescriptorSetLayout vk_texture_descriptor_set_layout = VK_NULL_HANDLE;
+
+        uint32_t model_texture_index[object_count] = { 0, 1, 2, 3, 4, 4 };
+
+        const char* texture_names[] = {
+            "Pyramid 0",
+            "Pyramid 1",
+            "Pyramid 2",
+            "Floor",
+            "Wall"
+        };
+
+        bool show_gizmos = false;
 
         constexpr uint32_t max_point_lights = 8;
         uint32_t point_light_count = 0;
@@ -159,6 +224,50 @@ namespace application {
         uint32_t spot_light_count = 0;
         SpotLight cpu_spot_lights[max_spot_lights];
         SpotLight* vk_spot_lights_buffer_mapped = nullptr;
+
+        bool loadAllTextures() {
+            struct TextureDesc {
+                const char* path;
+            };
+
+            const TextureDesc texture_descs[] = {
+                { "textures/pyramid0.png" },
+                { "textures/pyramid1.png" },
+                { "textures/pyramid2.png" },
+                { "textures/floor_1.png" },
+                { "textures/wall_1.png" },
+                { "textures/Black.png" },
+                { "textures/pyramid0_spec.png" },
+                { "textures/pyramid0_emis.png" },
+                { "textures/pyramid1_spec.png" },
+                { "textures/pyramid1_emis.png" },
+                { "textures/pyramid2_spec.png" },
+                { "textures/pyramid2_emis.png" },
+                { "textures/wall_1_spec.png" },
+                { "textures/floor_1_spec.png" },
+            };
+
+            texture_count = sizeof(texture_descs) / sizeof(texture_descs[0]);
+            if (texture_count > max_textures) {
+                std::cerr << "Too many textures\n";
+                return false;
+            }
+
+            for (uint32_t i = 0; i < texture_count; ++i) {
+                textures[i] = graphics::loadTexture(texture_descs[i].path);
+                if (textures[i].image == VK_NULL_HANDLE) {
+                    std::cerr << "Failed to load texture: " << texture_descs[i].path << '\n';
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        graphics::GpuBuffer floor_vb;
+        graphics::GpuBuffer floor_ib;
+        graphics::GpuBuffer wall_vb;
+        graphics::GpuBuffer wall_ib;
 
         graphics::GpuBuffer pyramid_vb;
         graphics::GpuBuffer pyramid_ib;
@@ -174,8 +283,10 @@ namespace application {
         graphics::GpuBuffer scene_ub;
         SceneUniforms* vk_scene_uniform_buffer_mapped = nullptr;
 
-        graphics::GpuBuffer model_ub[object_count];
-        ModelUniform* vk_model_uniform_buffers_mapped[object_count] = {};
+        graphics::GpuBuffer model_ubo;
+        uint8_t* model_ubo_mapped = nullptr;
+
+        VkDescriptorSet vk_model_descriptor_set = VK_NULL_HANDLE;
 
         graphics::GpuBuffer point_gizmo_ub[max_point_lights];
         ModelUniform* vk_point_gizmo_uniform_buffers_mapped[max_point_lights] = {};
@@ -230,14 +341,32 @@ namespace application {
             }
         }
 
-        bool createPyramidBuffers() {
-            pyramid_vb = graphics::createVertexBuffer(pyramid_vertices.size() * sizeof(Vertex));
-            if (pyramid_vb.buffer == VK_NULL_HANDLE) return false;
-            std::memcpy(pyramid_vb.mapped, pyramid_vertices.data(), pyramid_vb.size);
+        bool createFloorAndWallBuffers() {
+            floor_vb = graphics::createBufferWithData(floor_vertices.data(), floor_vertices.size() * sizeof(Vertex), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
+            if (floor_vb.buffer == VK_NULL_HANDLE) return false;
+            floor_ib = graphics::createBufferWithData(floor_indices.data(), floor_indices.size() * sizeof(uint32_t), VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+            if (floor_ib.buffer == VK_NULL_HANDLE) return false;
 
-            pyramid_ib = graphics::createIndexBuffer(pyramid_indices.size() * sizeof(uint32_t));
+            wall_vb = graphics::createBufferWithData(wall_vertices.data(), wall_vertices.size() * sizeof(Vertex), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
+            if (wall_vb.buffer == VK_NULL_HANDLE) return false;
+            wall_ib = graphics::createBufferWithData(wall_indices.data(), wall_indices.size() * sizeof(uint32_t), VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+            if (wall_ib.buffer == VK_NULL_HANDLE) return false;
+
+            return true;
+        }
+
+        bool createPyramidBuffers() {
+            pyramid_vb = graphics::createBufferWithData(
+                pyramid_vertices.data(),
+                pyramid_vertices.size() * sizeof(Vertex),
+                VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
+            if (pyramid_vb.buffer == VK_NULL_HANDLE) return false;
+
+            pyramid_ib = graphics::createBufferWithData(
+                pyramid_indices.data(),
+                pyramid_indices.size() * sizeof(uint32_t),
+                VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
             if (pyramid_ib.buffer == VK_NULL_HANDLE) return false;
-            std::memcpy(pyramid_ib.mapped, pyramid_indices.data(), pyramid_ib.size);
 
             return true;
         }
@@ -266,12 +395,12 @@ namespace application {
                     + realUp * std::sin(angle) * ring_radius;
                 glm::vec3 point = ring_center + offset;
 
-                out[vertex_count++] = { apex,  {1, 1, 1}, {0, 0, 1} };
-                out[vertex_count++] = { point, {1, 1, 1}, {0, 0, 1} };
+                out[vertex_count++] = { apex,  {1, 1, 1}, {0, 0, 1}, {0.5f, 0.5f} };
+                out[vertex_count++] = { point, {1, 1, 1}, {0, 0, 1}, {0.5f, 0.5f} };
 
                 if (i > 0) {
-                    out[vertex_count++] = { prev_point, {1, 1, 1}, {0, 0, 1} };
-                    out[vertex_count++] = { point,      {1, 1, 1}, {0, 0, 1} };
+                    out[vertex_count++] = { prev_point, {1, 1, 1}, {0, 0, 1}, {0.5f, 0.5f} };
+                    out[vertex_count++] = { point,      {1, 1, 1}, {0, 0, 1}, {0.5f, 0.5f} };
                 }
 
                 prev_point = point;
@@ -289,14 +418,32 @@ namespace application {
         }
 
         bool createCubeBuffers() {
-            cube_vb = graphics::createVertexBuffer(cube_vertices.size() * sizeof(Vertex));
+            cube_vb = graphics::createBufferWithData(
+                cube_vertices.data(),
+                cube_vertices.size() * sizeof(Vertex),
+                VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
             if (cube_vb.buffer == VK_NULL_HANDLE) return false;
-            std::memcpy(cube_vb.mapped, cube_vertices.data(), cube_vb.size);
 
-            cube_ib = graphics::createIndexBuffer(cube_indices.size() * sizeof(uint32_t));
+            cube_ib = graphics::createBufferWithData(
+                cube_indices.data(),
+                cube_indices.size() * sizeof(uint32_t),
+                VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
             if (cube_ib.buffer == VK_NULL_HANDLE) return false;
-            std::memcpy(cube_ib.mapped, cube_indices.data(), cube_ib.size);
 
+            return true;
+        }
+
+        bool queryDynamicUboAlignment() {
+            VkPhysicalDeviceProperties props = {};
+            vkGetPhysicalDeviceProperties(graphics::internal::context.physical_device, &props);
+
+            dynamic_ubo_alignment = props.limits.minUniformBufferOffsetAlignment;
+            model_uniform_stride = static_cast<uint32_t>(
+                (static_cast<uint32_t>(sizeof(ModelUniform)) + dynamic_ubo_alignment - 1)
+                / dynamic_ubo_alignment * dynamic_ubo_alignment);
+
+            std::cout << "Dynamic UBO alignment: " << dynamic_ubo_alignment
+                << ", stride: " << model_uniform_stride << '\n';
             return true;
         }
 
@@ -320,16 +467,45 @@ namespace application {
             vk_scene_uniform_buffer_mapped->_padding4 = 0.0f;
 
 
-            for (uint32_t i = 0; i < object_count; ++i) {
-                model_ub[i] = graphics::createUniformBuffer<ModelUniform>();
-                if (model_ub[i].buffer == VK_NULL_HANDLE) return false;
-                vk_model_uniform_buffers_mapped[i] = static_cast<ModelUniform*>(model_ub[i].mapped);
+            {
+                const size_t buffer_size = model_uniform_stride * object_count;
+                const VkBufferCreateInfo buffer_info = {
+                    .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+                    .size = buffer_size,
+                    .usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                    .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+                };
 
-                vk_model_uniform_buffers_mapped[i]->model = glm::mat4(1.0f);
-                vk_model_uniform_buffers_mapped[i]->albedo = glm::vec3(1.0f);
-                vk_model_uniform_buffers_mapped[i]->_padding0 = 0.0f;
-                vk_model_uniform_buffers_mapped[i]->specular = glm::vec3(1.0f);
-                vk_model_uniform_buffers_mapped[i]->alpha = 32.0f;
+                const VmaAllocationCreateInfo alloc_info = {
+                    .flags = VMA_ALLOCATION_CREATE_MAPPED_BIT
+                           | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
+                    .usage = VMA_MEMORY_USAGE_AUTO,
+                };
+
+                VmaAllocationInfo allocation_info{};
+
+                if (vmaCreateBuffer(graphics::internal::context.allocator,
+                    &buffer_info, &alloc_info,
+                    &model_ubo.buffer, &model_ubo.allocation,
+                    &allocation_info) != VK_SUCCESS) {
+                    std::cerr << "Failed to create model dynamic UBO\n";
+                    return false;
+                }
+
+                model_ubo.size = buffer_size;
+                model_ubo.mapped = allocation_info.pMappedData;
+                model_ubo_mapped = static_cast<uint8_t*>(model_ubo.mapped);
+
+                for (uint32_t i = 0; i < object_count; ++i) {
+                    ModelUniform* u = reinterpret_cast<ModelUniform*>(
+                        model_ubo_mapped + i * model_uniform_stride);
+                    u->model = glm::mat4(1.0f);
+                    u->albedo = glm::vec3(1.0f);
+                    u->_padding0 = 0.0f;
+                    u->specular = glm::vec3(1.0f);
+                    u->alpha = 32.0f;
+                    u->_padding1 = u->_padding2 = u->_padding3 = u->_padding4 = 0.0f;
+                }
             }
 
 
@@ -342,8 +518,7 @@ namespace application {
                 mapped->_padding0 = 0.0f;
                 mapped->specular = glm::vec3(0.0f);
                 mapped->alpha = 1.0f;
-                mapped->is_gizmo = 1.0f;
-                mapped->_padding1 = mapped->_padding2 = mapped->_padding3 = 0.0f;
+                mapped->_padding1 = mapped->_padding2 = mapped->_padding3 = mapped->_padding4 = 0.0f;
                 return true;
                 };
 
@@ -399,15 +574,17 @@ namespace application {
 
         VkDescriptorSetLayout vk_scene_descriptor_set_layout = VK_NULL_HANDLE;
         VkDescriptorSetLayout vk_model_descriptor_set_layout = VK_NULL_HANDLE;
+        VkDescriptorSetLayout vk_gizmo_descriptor_set_layout = VK_NULL_HANDLE;
         VkDescriptorPool vk_descriptor_pool = VK_NULL_HANDLE;
         VkDescriptorSet vk_scene_descriptor_set = VK_NULL_HANDLE;
-        VkDescriptorSet vk_model_descriptor_sets[object_count] = {};
         VkDescriptorSet vk_point_gizmo_descriptor_sets[max_point_lights] = {};
         VkDescriptorSet vk_spot_gizmo_descriptor_sets[max_spot_lights] = {};
         VkDescriptorSet vk_cone_descriptor_set = VK_NULL_HANDLE;
         VkPipelineLayout vk_pipeline_layout = VK_NULL_HANDLE;
+        VkPipelineLayout vk_gizmo_pipeline_layout = VK_NULL_HANDLE;
         VkPipeline vk_pipeline = VK_NULL_HANDLE;
         VkPipeline vk_line_pipeline = VK_NULL_HANDLE;
+        VkPipeline vk_gizmo_pipeline = VK_NULL_HANDLE;
 
         bool createDescriptors() {
             vk_scene_descriptor_set_layout = graphics::createDescriptorSetLayout({
@@ -434,70 +611,204 @@ namespace application {
             vk_model_descriptor_set_layout = graphics::createDescriptorSetLayout({
                 {
                     .binding = 0,
-                    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
                     .descriptorCount = 1,
                     .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
                 },
                 });
 
-            const VkDescriptorSetLayout set_layouts[] = {
+            vk_gizmo_descriptor_set_layout = graphics::createDescriptorSetLayout({
+                {
+                    .binding = 0,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                    .descriptorCount = 1,
+                    .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                },
+                });
+            vk_texture_descriptor_set_layout = graphics::createDescriptorSetLayout({
+                {
+                    .binding = 0,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                    .descriptorCount = 1,
+                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                },
+                {
+                    .binding = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                    .descriptorCount = 1,
+                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                },
+                {
+                    .binding = 2,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                    .descriptorCount = 1,
+                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                },
+                });
+            const VkDescriptorSetLayout model_set_layouts[] = {
                 vk_scene_descriptor_set_layout,
                 vk_model_descriptor_set_layout,
+                vk_texture_descriptor_set_layout,
+            };
+
+            const VkPushConstantRange push_const_range = {
+                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                .offset = 0,
+                .size = sizeof(float) * 2,
             };
 
             const VkPipelineLayoutCreateInfo pipeline_layout_info = {
                 .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-                .setLayoutCount = 2,
-                .pSetLayouts = set_layouts,
+                .setLayoutCount = 3,
+                .pSetLayouts = model_set_layouts,
+                .pushConstantRangeCount = 1,
+                .pPushConstantRanges = &push_const_range,
             };
 
             if (vkCreatePipelineLayout(graphics::internal::context.device,
                 &pipeline_layout_info, nullptr,
                 &vk_pipeline_layout) != VK_SUCCESS) {
-                std::cerr << "Failed to create pipeline layout\n";
+                std::cerr << "Failed to create main pipeline layout\n";
+                return false;
+            }
+            const VkDescriptorSetLayout gizmo_set_layouts[] = {
+                vk_scene_descriptor_set_layout,
+                vk_gizmo_descriptor_set_layout,
+            };
+
+            const VkPipelineLayoutCreateInfo gizmo_layout_info = {
+                .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+                .setLayoutCount = 2,
+                .pSetLayouts = gizmo_set_layouts,
+            };
+
+            if (vkCreatePipelineLayout(graphics::internal::context.device,
+                &gizmo_layout_info, nullptr,
+                &vk_gizmo_pipeline_layout) != VK_SUCCESS) {
+                std::cerr << "Failed to create gizmo pipeline layout\n";
                 return false;
             }
 
             vk_descriptor_pool = graphics::createDescriptorPool({
                 {
                     .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                    .descriptorCount = 2 + object_count + max_point_lights + max_spot_lights,
+                    .descriptorCount = 2 + max_point_lights + max_spot_lights,
+                },
+                {
+                    .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
+                    .descriptorCount = 1,
                 },
                 {
                     .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
                     .descriptorCount = 2,
                 },
-                }, 2 + object_count + max_point_lights + max_spot_lights);
+                {
+                    .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                    .descriptorCount = max_textures * 3,
+                },
+                }, 6 + max_point_lights + max_spot_lights + max_textures * 3);
 
             vk_scene_descriptor_set = graphics::allocateDescriptorSet(vk_descriptor_pool, vk_scene_descriptor_set_layout);
 
-            {
-                VkDescriptorSetLayout model_layouts[object_count];
-                for (uint32_t i = 0; i < object_count; ++i) model_layouts[i] = vk_model_descriptor_set_layout;
-                graphics::allocateDescriptorSets(vk_descriptor_pool, model_layouts, object_count, vk_model_descriptor_sets);
-            }
+            vk_model_descriptor_set = graphics::allocateDescriptorSet(
+                vk_descriptor_pool, vk_model_descriptor_set_layout);
 
             {
                 VkDescriptorSetLayout layouts[max_point_lights];
-                for (uint32_t i = 0; i < max_point_lights; ++i) layouts[i] = vk_model_descriptor_set_layout;
+                for (uint32_t i = 0; i < max_point_lights; ++i) layouts[i] = vk_gizmo_descriptor_set_layout;
                 graphics::allocateDescriptorSets(vk_descriptor_pool, layouts, max_point_lights, vk_point_gizmo_descriptor_sets);
             }
 
             {
                 VkDescriptorSetLayout layouts[max_spot_lights];
-                for (uint32_t i = 0; i < max_spot_lights; ++i) layouts[i] = vk_model_descriptor_set_layout;
+                for (uint32_t i = 0; i < max_spot_lights; ++i) layouts[i] = vk_gizmo_descriptor_set_layout;
                 graphics::allocateDescriptorSets(vk_descriptor_pool, layouts, max_spot_lights, vk_spot_gizmo_descriptor_sets);
             }
 
-            vk_cone_descriptor_set = graphics::allocateDescriptorSet(vk_descriptor_pool, vk_model_descriptor_set_layout);
+            vk_cone_descriptor_set = graphics::allocateDescriptorSet(vk_descriptor_pool, vk_gizmo_descriptor_set_layout);
+
+            for (uint32_t i = 0; i < texture_count; ++i) {
+                vk_texture_descriptor_sets[i] = graphics::allocateDescriptorSet(
+                    vk_descriptor_pool, vk_texture_descriptor_set_layout);
+
+                uint32_t albedo_idx = i;
+                uint32_t specular_idx = 5;
+                uint32_t emissive_idx = 5;
+
+                if (i == 0) {
+                    specular_idx = 6;
+                    emissive_idx = 7;
+                }
+                else if (i == 1) {
+                    specular_idx = 8;
+                    emissive_idx = 9;
+                }
+                else if (i == 2) {
+                    specular_idx = 10;
+                    emissive_idx = 11;
+                }
+                else if (i == 3) {
+                    specular_idx = 13;
+                    emissive_idx = 5;
+                }
+                else if (i == 4) {
+                    specular_idx = 12;
+                    emissive_idx = 5;
+                }
+
+                const VkDescriptorImageInfo image_infos[3] = {
+                    {
+                        .sampler = textures[albedo_idx].sampler,
+                        .imageView = textures[albedo_idx].view,
+                        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                    },
+                    {
+                        .sampler = textures[specular_idx].sampler,
+                        .imageView = textures[specular_idx].view,
+                        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                    },
+                    {
+                        .sampler = textures[emissive_idx].sampler,
+                        .imageView = textures[emissive_idx].view,
+                        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                    }
+                };
+
+                const VkWriteDescriptorSet writes[3] = {
+                    {
+                        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                        .dstSet = vk_texture_descriptor_sets[i],
+                        .dstBinding = 0,
+                        .descriptorCount = 1,
+                        .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                        .pImageInfo = &image_infos[0],
+                    },
+                    {
+                        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                        .dstSet = vk_texture_descriptor_sets[i],
+                        .dstBinding = 1,
+                        .descriptorCount = 1,
+                        .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                        .pImageInfo = &image_infos[1],
+                    },
+                    {
+                        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                        .dstSet = vk_texture_descriptor_sets[i],
+                        .dstBinding = 2,
+                        .descriptorCount = 1,
+                        .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                        .pImageInfo = &image_infos[2],
+                    }
+                };
+
+                vkUpdateDescriptorSets(graphics::internal::context.device, 3, writes, 0, nullptr);
+            }
 
             graphics::writeUniformBuffer(vk_scene_descriptor_set, scene_ub.buffer, sizeof(SceneUniforms), 0);
             graphics::writeStorageBuffer(vk_scene_descriptor_set, point_lights_sb.buffer, 1);
             graphics::writeStorageBuffer(vk_scene_descriptor_set, spot_lights_sb.buffer, 2);
 
-            for (uint32_t i = 0; i < object_count; ++i) {
-                graphics::writeUniformBuffer(vk_model_descriptor_sets[i], model_ub[i].buffer, sizeof(ModelUniform), 0);
-            }
+            graphics::writeDynamicUniformBuffer(vk_model_descriptor_set, model_ubo.buffer, model_uniform_stride, 0);
 
             for (uint32_t i = 0; i < max_point_lights; ++i)
                 graphics::writeUniformBuffer(vk_point_gizmo_descriptor_sets[i], point_gizmo_ub[i].buffer, sizeof(ModelUniform), 0);
@@ -513,7 +824,8 @@ namespace application {
         bool createPipeline() {
             VkShaderModule vert_module = graphics::loadShader("shaders/shader.vert.spv");
             VkShaderModule frag_module = graphics::loadShader("shaders/shader.frag.spv");
-            if (vert_module == VK_NULL_HANDLE || frag_module == VK_NULL_HANDLE) {
+            VkShaderModule gizmo_frag_module = graphics::loadShader("shaders/gizmo.frag.spv");
+            if (vert_module == VK_NULL_HANDLE || frag_module == VK_NULL_HANDLE || gizmo_frag_module == VK_NULL_HANDLE) {
                 return false;
             }
 
@@ -542,6 +854,12 @@ namespace application {
                     .format = VK_FORMAT_R32G32B32_SFLOAT,
                     .offset = offsetof(Vertex, normal),
                 },
+                {
+                    .location = 3,
+                    .binding = 0,
+                    .format = VK_FORMAT_R32G32_SFLOAT,
+                    .offset = offsetof(Vertex, uv),
+                },
             };
 
             graphics::PipelineConfig config = {};
@@ -552,25 +870,32 @@ namespace application {
             config.vertexBindings = &vertex_binding;
             config.vertexBindingCount = 1;
             config.vertexAttributes = vertex_attributes;
-            config.vertexAttributeCount = 3;
+            config.vertexAttributeCount = 4;
             config.layout = vk_pipeline_layout;
             config.renderPass = graphics::internal::context.render_pass;
 
             vk_pipeline = graphics::createGraphicsPipeline(config);
 
+            config.fragmentShader = gizmo_frag_module;
+            config.layout = vk_gizmo_pipeline_layout;
+            vk_gizmo_pipeline = graphics::createGraphicsPipeline(config);
+
             config.topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
             config.cullMode = VK_CULL_MODE_NONE;
-
             vk_line_pipeline = graphics::createGraphicsPipeline(config);
 
             vkDestroyShaderModule(graphics::internal::context.device, vert_module, nullptr);
             vkDestroyShaderModule(graphics::internal::context.device, frag_module, nullptr);
+            vkDestroyShaderModule(graphics::internal::context.device, gizmo_frag_module, nullptr);
 
-            return vk_pipeline != VK_NULL_HANDLE && vk_line_pipeline != VK_NULL_HANDLE;
+            return vk_pipeline != VK_NULL_HANDLE && vk_line_pipeline != VK_NULL_HANDLE && vk_gizmo_pipeline != VK_NULL_HANDLE;
         }
     } // namespace
 
     bool initialize() {
+        if (!queryDynamicUboAlignment()) {
+            return false;
+        }
         computeVertexNormals(pyramid_vertices, pyramid_indices);
 
         if (!createConeBuffer()) {
@@ -588,7 +913,13 @@ namespace application {
         if (!createCubeBuffers()) {
             return false;
         }
+        if (!createFloorAndWallBuffers()) {
+            return false;
+        }
         if (!createUniformBuffers()) {
+            return false;
+        }
+        if (!loadAllTextures()) {
             return false;
         }
         if (!createDescriptors()) {
@@ -612,17 +943,23 @@ namespace application {
             vkDestroyPipeline(context.device, vk_line_pipeline, nullptr);
             vk_line_pipeline = VK_NULL_HANDLE;
         }
+        if (vk_gizmo_pipeline != VK_NULL_HANDLE) {
+            vkDestroyPipeline(context.device, vk_gizmo_pipeline, nullptr);
+            vk_gizmo_pipeline = VK_NULL_HANDLE;
+        }
         if (vk_pipeline_layout != VK_NULL_HANDLE) {
             vkDestroyPipelineLayout(context.device, vk_pipeline_layout, nullptr);
             vk_pipeline_layout = VK_NULL_HANDLE;
+        }
+        if (vk_gizmo_pipeline_layout != VK_NULL_HANDLE) {
+            vkDestroyPipelineLayout(context.device, vk_gizmo_pipeline_layout, nullptr);
+            vk_gizmo_pipeline_layout = VK_NULL_HANDLE;
         }
         if (vk_descriptor_pool != VK_NULL_HANDLE) {
             vkDestroyDescriptorPool(context.device, vk_descriptor_pool, nullptr);
             vk_descriptor_pool = VK_NULL_HANDLE;
             vk_scene_descriptor_set = VK_NULL_HANDLE;
-            for (uint32_t i = 0; i < object_count; ++i) {
-                vk_model_descriptor_sets[i] = VK_NULL_HANDLE;
-            }
+            vk_model_descriptor_set = VK_NULL_HANDLE;
             for (uint32_t i = 0; i < max_point_lights; ++i) vk_point_gizmo_descriptor_sets[i] = VK_NULL_HANDLE;
             for (uint32_t i = 0; i < max_spot_lights; ++i) vk_spot_gizmo_descriptor_sets[i] = VK_NULL_HANDLE;
             vk_cone_descriptor_set = VK_NULL_HANDLE;
@@ -635,6 +972,21 @@ namespace application {
             vkDestroyDescriptorSetLayout(context.device, vk_model_descriptor_set_layout, nullptr);
             vk_model_descriptor_set_layout = VK_NULL_HANDLE;
         }
+        if (vk_gizmo_descriptor_set_layout != VK_NULL_HANDLE) {
+            vkDestroyDescriptorSetLayout(context.device, vk_gizmo_descriptor_set_layout, nullptr);
+            vk_gizmo_descriptor_set_layout = VK_NULL_HANDLE;
+        }
+        if (vk_texture_descriptor_set_layout != VK_NULL_HANDLE) {
+            vkDestroyDescriptorSetLayout(context.device, vk_texture_descriptor_set_layout, nullptr);
+            vk_texture_descriptor_set_layout = VK_NULL_HANDLE;
+        }
+        for (uint32_t i = 0; i < texture_count; ++i) {
+            graphics::destroyTexture(textures[i]);
+        }
+        graphics::destroyBuffer(floor_vb);
+        graphics::destroyBuffer(floor_ib);
+        graphics::destroyBuffer(wall_vb);
+        graphics::destroyBuffer(wall_ib);
         graphics::destroyBuffer(pyramid_vb);
         graphics::destroyBuffer(pyramid_ib);
         graphics::destroyBuffer(cube_vb);
@@ -642,7 +994,7 @@ namespace application {
         graphics::destroyBuffer(cone_vb);
         graphics::destroyBuffer(scene_ub);
 
-        for (auto& buf : model_ub) graphics::destroyBuffer(buf);
+        graphics::destroyBuffer(model_ubo);
         for (auto& buf : point_gizmo_ub) graphics::destroyBuffer(buf);
         for (auto& buf : spot_gizmo_ub) graphics::destroyBuffer(buf);
         graphics::destroyBuffer(cone_ub);
@@ -652,53 +1004,83 @@ namespace application {
     }
 
     void update(double time) {
+        GLFWwindow* window = graphics::internal::context.window;
         const auto& extent = graphics::internal::context.swapchain_extent;
         const float aspect = float(extent.width) / float(extent.height);
 
-        static glm::vec3 camera_position = glm::vec3(5.0f, 2.5f, 5.0f);
-        static float camera_yaw = -135.0f;
+        static glm::vec3 camera_position = glm::vec3(4.649f, 1.964f, 3.885f);
+        static float camera_yaw = -136.0f;
 
-        static float camera_pitch = -20.0f;
+        static float camera_pitch = -7.3f;
         static float camera_fov = 40.0f;
 
-        static glm::vec3 directional_light_direction = glm::vec3(-0.5f, -1.0f, -0.3f);
-        static glm::vec3 directional_light_color = glm::vec3(1.0f, 0.95f, 0.8f);
-        static float directional_light_intensity = 1.0f;
-        static glm::vec3 ambient_light = glm::vec3(0.1f, 0.1f, 0.12f);
+        static glm::vec3 directional_light_direction = glm::vec3(-0.2f, -1.0f, 0.3f);
+        static glm::vec3 directional_light_color = glm::vec3(0.2f, 0.3f, 0.5f);
+        static float directional_light_intensity = 0.3f;
+        static glm::vec3 ambient_light = glm::vec3(0.02f, 0.03f, 0.06f);
 
         static glm::vec3 albedo = glm::vec3(1.0f, 1.0f, 1.0f);
-        static glm::vec3 specular = glm::vec3(1.0f, 1.0f, 1.0f);
-        static float alpha = 32.0f;
+        static glm::vec3 specular = glm::vec3(0.8f, 0.8f, 0.8f);
+        static float alpha = 16.0f;
 
         static int projection_mode = 0;
 
         static int selected_object = 0;
 
         static glm::vec3 manual_position[object_count] = {
-            glm::vec3(0.0f, 0.0f, 0.0f),
-            glm::vec3(-2.0f, 0.0f, 0.0f),
-            glm::vec3(2.0f, 0.0f, 0.0f)
+            glm::vec3(-1.308f, 0.038f, -1.154f),
+            glm::vec3(-0.577f, 0.131f, 0.19f),
+            glm::vec3(1.461f, -0.07f, -0.385f)
         };
 
         static glm::vec3 manual_rotation[object_count] = {
-            glm::vec3(0.0f),
-            glm::vec3(0.0f, 45.0f, 0.0f),
-            glm::vec3(0.0f, -30.0f, 0.0f)
+            glm::vec3(0.0f, 41.538f, 0.0f),
+            glm::vec3(0.0f, 3.461f, 0.0f),
+            glm::vec3(0.0f, -9.231f, 0.0f)
         };
 
         static glm::vec3 scale[object_count] = {
-            glm::vec3(1.0f),
-            glm::vec3(0.8f),
-            glm::vec3(0.6f)
+            glm::vec3(1.782f, 2.729f, 1.781f),
+            glm::vec3(1.524f, 1.860f, 1.191f),
+            glm::vec3(1.046f, 1.659f, 0.991f)
         };
 
         static glm::vec3 color[object_count] = {
-            glm::vec3(0.6f, 0.2f, 0.2f),
-            glm::vec3(1.0f, 0.5f, 0.2f),
-            glm::vec3(0.2f, 0.5f, 1.0f)
+            glm::vec3(1.0f, 1.0f, 1.0f),
+            glm::vec3(1.0f, 1.0f, 1.0f),
+            glm::vec3(1.0f, 1.0f, 1.0f)
         };
 
-        static bool  is_playing = true;
+        static bool lights_initialized = false;
+        if (!lights_initialized) {
+            point_light_count = 3;
+
+            cpu_point_lights[0].position = manual_position[0] + glm::vec3(0.8f, 2.388f, 0.4f);
+            cpu_point_lights[0].color = glm::vec3(0.6f, 0.2f, 0.9f);
+            cpu_point_lights[0].intensity = 2.3f;
+
+            cpu_point_lights[1].position = manual_position[1] + glm::vec3(0.0f, 1.5f, 0.385f);
+            cpu_point_lights[1].color = glm::vec3(0.2f, 0.8f, 0.3f);
+            cpu_point_lights[1].intensity = 2.3f;
+
+            cpu_point_lights[2].position = manual_position[2] + glm::vec3(0.0f, 1.8f, 0.0f);
+            cpu_point_lights[2].color = glm::vec3(0.2f, 0.7f, 0.9f);
+            cpu_point_lights[2].intensity = 2.3f;
+
+            spot_light_count = 1;
+            cpu_spot_lights[0].position = glm::vec3(0.0f, 5.0f, 0.0f);
+            cpu_spot_lights[0].direction = glm::vec3(0.0f, -1.0f, 0.0f);
+            cpu_spot_lights[0].color = glm::vec3(0.06f, 0.06f, 0.96f);
+            cpu_spot_lights[0].intensity = 10.0f;
+            cpu_spot_lights[0].inner_angle_deg = 20.0f;
+            cpu_spot_lights[0].outer_angle_deg = 35.0f;
+            cpu_spot_lights[0].inner_cosine = std::cos(glm::radians(cpu_spot_lights[0].inner_angle_deg));
+            cpu_spot_lights[0].outer_cosine = std::cos(glm::radians(cpu_spot_lights[0].outer_angle_deg));
+
+            lights_initialized = true;
+        }
+
+        static bool  is_playing = false;
         static float anim_speed = 1.0f;
         static float anim_radius = 0.6f;
         static float anim_height = 0.0f;
@@ -706,6 +1088,7 @@ namespace application {
 
         static double last_time = time;
         const double delta = time - last_time;
+        app_time = float(time);
         last_time = time;
 
         if (is_playing) {
@@ -732,7 +1115,7 @@ namespace application {
         ImGui::Text("Material:");
         ImGui::ColorEdit3("Albedo", &albedo.x);
         ImGui::ColorEdit3("Specular", &specular.x);
-        ImGui::SliderFloat("Alpha", &alpha, 1.0f, 256.0f);
+        ImGui::SliderFloat("Alpha", &alpha, 1.0f, 512.0f);
 
         ImGui::Separator();
         ImGui::Text("Point Lights (%u / %u):", point_light_count, max_point_lights);
@@ -793,14 +1176,11 @@ namespace application {
             ImGui::ColorEdit3("Color##spot", &cpu_spot_lights[i].color.x);
             ImGui::SliderFloat("Intensity##spot", &cpu_spot_lights[i].intensity, 0.0f, 20.0f);
 
-            if (ImGui::SliderFloat("Outer Angle##spot", &cpu_spot_lights[i].outer_angle_deg,
-                cpu_spot_lights[i].inner_angle_deg + 1.0f, 60.0f, "%.1f deg")) {
-                cpu_spot_lights[i].outer_cosine = std::cos(glm::radians(cpu_spot_lights[i].outer_angle_deg));
-            }
-            if (ImGui::SliderFloat("Inner Angle##spot", &cpu_spot_lights[i].inner_angle_deg,
-                1.0f, cpu_spot_lights[i].outer_angle_deg - 1.0f, "%.1f deg")) {
-                cpu_spot_lights[i].inner_cosine = std::cos(glm::radians(cpu_spot_lights[i].inner_angle_deg));
-            }
+            ImGui::SliderFloat("Outer Angle##spot", &cpu_spot_lights[i].outer_angle_deg,
+                cpu_spot_lights[i].inner_angle_deg + 1.0f, 60.0f, "%.1f deg");
+            ImGui::SliderFloat("Inner Angle##spot", &cpu_spot_lights[i].inner_angle_deg,
+                1.0f, cpu_spot_lights[i].outer_angle_deg - 1.0f, "%.1f deg");
+
             cpu_spot_lights[i].inner_cosine = std::cos(glm::radians(cpu_spot_lights[i].inner_angle_deg));
             cpu_spot_lights[i].outer_cosine = std::cos(glm::radians(cpu_spot_lights[i].outer_angle_deg));
 
@@ -809,6 +1189,72 @@ namespace application {
 
         ImGui::Separator();
         ImGui::Checkbox("Show Light Gizmos", &show_gizmos);
+
+        ImGui::Separator();
+        ImGui::Text("Texture Selection:");
+
+        for (int i = 0; i < 3; ++i) {
+            ImGui::PushID(i);
+
+            char label[64];
+            snprintf(label, sizeof(label), "Pyramid %d Texture", i);
+
+            int current_tex = model_texture_index[i];
+
+            if (ImGui::BeginCombo(label, texture_names[current_tex])) {
+                for (uint32_t t = 0; t < 5; ++t) {
+                    bool is_selected = (current_tex == static_cast<int>(t));
+                    if (ImGui::Selectable(texture_names[t], is_selected)) {
+                        model_texture_index[i] = t;
+                    }
+                    if (is_selected) {
+                        ImGui::SetItemDefaultFocus();
+                    }
+                }
+                ImGui::EndCombo();
+            }
+
+            ImGui::PopID();
+        }
+
+        {
+            ImGui::PushID(100);
+            int current_tex = model_texture_index[3];
+            if (ImGui::BeginCombo("Floor Texture", texture_names[current_tex])) {
+                for (uint32_t t = 0; t < 5; ++t) {
+                    bool is_selected = (current_tex == static_cast<int>(t));
+                    if (ImGui::Selectable(texture_names[t], is_selected)) {
+                        model_texture_index[3] = t;
+                    }
+                    if (is_selected) {
+                        ImGui::SetItemDefaultFocus();
+                    }
+                }
+                ImGui::EndCombo();
+            }
+            ImGui::PopID();
+        }
+
+        {
+            ImGui::PushID(101);
+            int current_tex = model_texture_index[4];
+            if (ImGui::BeginCombo("Wall Texture", texture_names[current_tex])) {
+                for (uint32_t t = 0; t < 5; ++t) {
+                    bool is_selected = (current_tex == static_cast<int>(t));
+                    if (ImGui::Selectable(texture_names[t], is_selected)) {
+                        model_texture_index[4] = t;
+                        model_texture_index[5] = t;
+                    }
+                    if (is_selected) {
+                        ImGui::SetItemDefaultFocus();
+                    }
+                }
+                ImGui::EndCombo();
+            }
+            ImGui::PopID();
+        }
+
+        ImGui::Checkbox("Enable All Effects", &global_effect_enabled);
 
         ImGui::Text("Select Pyramid:");
         ImGui::RadioButton("Pyramid 0", &selected_object, 0);
@@ -862,6 +1308,62 @@ namespace application {
         camera_front.z = std::sin(glm::radians(camera_yaw)) * std::cos(glm::radians(camera_pitch));
         camera_front = glm::normalize(camera_front);
 
+        static double prev_mouse_x = 0.0;
+        static double prev_mouse_y = 0.0;
+        static bool first_mouse = true;
+
+        float camera_speed = 5.0f * float(delta);
+
+        glm::vec3 right = glm::normalize(glm::cross(camera_front, glm::vec3(0.0f, 1.0f, 0.0f)));
+
+        if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) camera_position += camera_front * camera_speed;
+        if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) camera_position -= camera_front * camera_speed;
+        if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) camera_position -= right * camera_speed;
+        if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) camera_position += right * camera_speed;
+
+        if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS) camera_position.y += camera_speed;
+        if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) camera_position.y -= camera_speed;
+
+        double mouse_x, mouse_y;
+        glfwGetCursorPos(window, &mouse_x, &mouse_y);
+
+        if (first_mouse) {
+            prev_mouse_x = mouse_x;
+            prev_mouse_y = mouse_y;
+            first_mouse = false;
+        }
+
+        double delta_x = mouse_x - prev_mouse_x;
+        double delta_y = mouse_y - prev_mouse_y;
+        prev_mouse_x = mouse_x;
+        prev_mouse_y = mouse_y;
+
+        bool is_over_ui = ImGui::GetIO().WantCaptureMouse;
+
+        if (!is_over_ui && glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
+            float sensitivity = 0.1f;
+            camera_yaw += float(delta_x) * sensitivity;
+            camera_pitch -= float(delta_y) * sensitivity;
+
+            if (camera_pitch > 89.0f) camera_pitch = 89.0f;
+            if (camera_pitch < -89.0f) camera_pitch = -89.0f;
+        }
+
+        static bool cursor_disabled = false;
+        if (!is_over_ui && glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
+            if (!cursor_disabled) {
+                glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+                first_mouse = true;
+                cursor_disabled = true;
+            }
+        }
+        else {
+            if (cursor_disabled) {
+                glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+                cursor_disabled = false;
+            }
+        }
+
         glm::mat4 view = glm::lookAt(
             camera_position,
             camera_position + camera_front,
@@ -913,33 +1415,47 @@ namespace application {
         vk_scene_uniform_buffer_mapped->spot_light_count = spot_light_count;
 
         for (int i = 0; i < object_count; ++i) {
-            glm::mat4 model = glm::mat4(1.0f);
+            ModelUniform* u = reinterpret_cast<ModelUniform*>(
+                model_ubo_mapped + i * model_uniform_stride);
 
+            if (i >= 3) {
+                glm::mat4 model = glm::mat4(1.0f);
+
+                if (i == 4) {
+                    model = glm::mat4(1.0f);
+                }
+                else if (i == 5) {
+                    model = glm::rotate(model, glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+                }
+
+                u->model = model;
+                u->albedo = glm::vec3(1.0f);
+                u->specular = glm::vec3(0.0f);
+                u->alpha = 1.0f;
+                u->_padding1 = u->_padding2 = u->_padding3 = u->_padding4 = 0.0f;
+                continue;
+            }
+
+            glm::mat4 model = glm::mat4(1.0f);
             glm::vec3 final_position = manual_position[i];
 
             float phase_angle = anim_angle + float(i) * 2.094f;
             final_position.x += anim_radius * std::cos(phase_angle);
             final_position.z += anim_radius * std::sin(phase_angle);
-            float wave_amplitude = 0.3f;
+            float wave_amplitude = 0.1f;
             final_position.y += anim_height + wave_amplitude * std::sin(phase_angle * 2.0f);
 
             model = glm::translate(model, final_position);
-
             model = glm::rotate(model, glm::radians(manual_rotation[i].x), glm::vec3(1.0f, 0.0f, 0.0f));
             model = glm::rotate(model, glm::radians(manual_rotation[i].y) + anim_angle * 2.0f, glm::vec3(0.0f, 1.0f, 0.0f));
             model = glm::rotate(model, glm::radians(manual_rotation[i].z), glm::vec3(0.0f, 0.0f, 1.0f));
-
             model = glm::scale(model, scale[i]);
 
-
-            vk_model_uniform_buffers_mapped[i]->model = model;
-            vk_model_uniform_buffers_mapped[i]->albedo = albedo * color[i];
-            vk_model_uniform_buffers_mapped[i]->specular = specular;
-            vk_model_uniform_buffers_mapped[i]->alpha = alpha;
-            vk_model_uniform_buffers_mapped[i]->is_gizmo = 0.0f;
-            vk_model_uniform_buffers_mapped[i]->_padding1 = 0.0f;
-            vk_model_uniform_buffers_mapped[i]->_padding2 = 0.0f;
-            vk_model_uniform_buffers_mapped[i]->_padding3 = 0.0f;
+            u->model = model;
+            u->albedo = albedo * color[i];
+            u->specular = specular;
+            u->alpha = alpha;
+            u->_padding1 = u->_padding2 = u->_padding3 = u->_padding4 = 0.0f;
         }
     }
 
@@ -997,20 +1513,77 @@ namespace application {
             &vk_scene_descriptor_set,
             0, nullptr);
 
-        for (uint32_t i = 0; i < object_count; ++i) {
-            vkCmdBindDescriptorSets(fd.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                vk_pipeline_layout, 1, 1, &vk_model_descriptor_sets[i],
-                0, nullptr);
+        for (uint32_t i = 0; i < 3; ++i) {
+            uint32_t dynamic_offset = i * model_uniform_stride;
 
-            vkCmdDrawIndexed(fd.command_buffer,
-                static_cast<uint32_t>(pyramid_indices.size()),
-                1, 0, 0, 0);
+            float effect_id = 0.0f;
+            if (i == 0) {
+                effect_id = 1.0f;
+            }
+            else if (i == 1) {
+                effect_id = 2.0f;
+            }
+            else if (i == 2) {
+                effect_id = 3.0f;
+            }
+
+            float effect_time = global_effect_enabled ? app_time : 0.0f;
+            PushConst pc = { effect_time, effect_id };
+
+            vkCmdPushConstants(fd.command_buffer, vk_pipeline_layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConst), &pc);
+            vkCmdBindDescriptorSets(fd.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_pipeline_layout, 1, 1, &vk_model_descriptor_set, 1, &dynamic_offset);
+            vkCmdBindDescriptorSets(fd.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_pipeline_layout, 2, 1, &vk_texture_descriptor_sets[model_texture_index[i]], 0, nullptr);
+            vkCmdDrawIndexed(fd.command_buffer, static_cast<uint32_t>(pyramid_indices.size()), 1, 0, 0, 0);
         }
+
+        {
+            uint32_t i = 3;
+            uint32_t dynamic_offset = i * model_uniform_stride;
+
+            PushConst pc = { app_time, 0.0f };
+            vkCmdPushConstants(fd.command_buffer, vk_pipeline_layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConst), &pc);
+
+            vkCmdBindVertexBuffers(fd.command_buffer, 0, 1, &floor_vb.buffer, &vertex_buffer_offset);
+            vkCmdBindIndexBuffer(fd.command_buffer, floor_ib.buffer, 0, VK_INDEX_TYPE_UINT32);
+            vkCmdBindDescriptorSets(fd.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_pipeline_layout, 1, 1, &vk_model_descriptor_set, 1, &dynamic_offset);
+            vkCmdBindDescriptorSets(fd.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_pipeline_layout, 2, 1, &vk_texture_descriptor_sets[model_texture_index[i]], 0, nullptr);
+            vkCmdDrawIndexed(fd.command_buffer, static_cast<uint32_t>(floor_indices.size()), 1, 0, 0, 0);
+        }
+
+        {
+            uint32_t i = 4;
+            uint32_t dynamic_offset = i * model_uniform_stride;
+
+            PushConst pc = { app_time, 0.0f };
+            vkCmdPushConstants(fd.command_buffer, vk_pipeline_layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConst), &pc);
+
+            vkCmdBindVertexBuffers(fd.command_buffer, 0, 1, &wall_vb.buffer, &vertex_buffer_offset);
+            vkCmdBindIndexBuffer(fd.command_buffer, wall_ib.buffer, 0, VK_INDEX_TYPE_UINT32);
+            vkCmdBindDescriptorSets(fd.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_pipeline_layout, 1, 1, &vk_model_descriptor_set, 1, &dynamic_offset);
+            vkCmdBindDescriptorSets(fd.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_pipeline_layout, 2, 1, &vk_texture_descriptor_sets[model_texture_index[i]], 0, nullptr);
+            vkCmdDrawIndexed(fd.command_buffer, static_cast<uint32_t>(wall_indices.size()), 1, 0, 0, 0);
+        }
+
+        {
+            uint32_t i = 5;
+            uint32_t dynamic_offset = i * model_uniform_stride;
+
+            PushConst pc = { app_time, 0.0f };
+            vkCmdPushConstants(fd.command_buffer, vk_pipeline_layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConst), &pc);
+
+            vkCmdBindVertexBuffers(fd.command_buffer, 0, 1, &wall_vb.buffer, &vertex_buffer_offset);
+            vkCmdBindIndexBuffer(fd.command_buffer, wall_ib.buffer, 0, VK_INDEX_TYPE_UINT32);
+            vkCmdBindDescriptorSets(fd.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_pipeline_layout, 1, 1, &vk_model_descriptor_set, 1, &dynamic_offset);
+            vkCmdBindDescriptorSets(fd.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_pipeline_layout, 2, 1, &vk_texture_descriptor_sets[model_texture_index[i]], 0, nullptr);
+            vkCmdDrawIndexed(fd.command_buffer, static_cast<uint32_t>(wall_indices.size()), 1, 0, 0, 0);
+        }
+
 
 
         if (show_gizmos) {
             const VkDeviceSize offset = 0;
 
+            vkCmdBindPipeline(fd.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_gizmo_pipeline);
             vkCmdBindVertexBuffers(fd.command_buffer, 0, 1, &cube_vb.buffer, &offset);
             vkCmdBindIndexBuffer(fd.command_buffer, cube_ib.buffer, 0, VK_INDEX_TYPE_UINT32);
 
@@ -1021,10 +1594,9 @@ namespace application {
                 ModelUniform* marker = vk_point_gizmo_uniform_buffers_mapped[i];
                 marker->model = model;
                 marker->albedo = cpu_point_lights[i].color;
-                marker->is_gizmo = 1.0f;
 
                 vkCmdBindDescriptorSets(fd.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                    vk_pipeline_layout, 1, 1, &vk_point_gizmo_descriptor_sets[i], 0, nullptr);
+                    vk_gizmo_pipeline_layout, 1, 1, &vk_point_gizmo_descriptor_sets[i], 0, nullptr);
                 vkCmdDrawIndexed(fd.command_buffer, static_cast<uint32_t>(cube_indices.size()), 1, 0, 0, 0);
             }
 
@@ -1035,16 +1607,15 @@ namespace application {
                 ModelUniform* marker = vk_spot_gizmo_uniform_buffers_mapped[i];
                 marker->model = model;
                 marker->albedo = cpu_spot_lights[i].color;
-                marker->is_gizmo = 1.0f;
 
                 vkCmdBindDescriptorSets(fd.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                    vk_pipeline_layout, 1, 1, &vk_spot_gizmo_descriptor_sets[i], 0, nullptr);
+                    vk_gizmo_pipeline_layout, 1, 1, &vk_spot_gizmo_descriptor_sets[i], 0, nullptr);
                 vkCmdDrawIndexed(fd.command_buffer, static_cast<uint32_t>(cube_indices.size()), 1, 0, 0, 0);
             }
 
             if (spot_light_count > 0) {
                 uint32_t total_vertices = 0;
-                constexpr uint32_t vertices_per_cone = 66;
+                constexpr uint32_t vertices_per_cone = 34;
                 for (uint32_t i = 0; i < spot_light_count; ++i) {
                     if (total_vertices + vertices_per_cone > max_cone_vertices) break;
                     const uint32_t count = buildConeVertices(
@@ -1055,11 +1626,9 @@ namespace application {
                 if (total_vertices > 0) {
                     vk_cone_uniform_buffer_mapped->model = glm::mat4(1.0f);
                     vk_cone_uniform_buffer_mapped->albedo = glm::vec3(1.0f);
-                    vk_cone_uniform_buffer_mapped->is_gizmo = 1.0f;
 
                     vkCmdBindDescriptorSets(fd.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                        vk_pipeline_layout, 1, 1, &vk_cone_descriptor_set, 0, nullptr);
-
+                        vk_gizmo_pipeline_layout, 1, 1, &vk_cone_descriptor_set, 0, nullptr);
                     vkCmdBindPipeline(fd.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_line_pipeline);
 
                     const VkDeviceSize cone_offset = 0;
