@@ -4,8 +4,24 @@
 #include <vk_mem_alloc.h>
 #include <cstddef>
 #include <vector>
+#include <glm/glm.hpp>
 
 namespace graphics {
+    struct Vertex {
+        glm::vec3 position;
+        glm::vec3 color;
+        glm::vec3 normal;
+        glm::vec2 uv;
+    };
+
+    void computeVertexNormals(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices);
+
+    uint32_t buildConeVertices(const glm::vec3& apex,
+        const glm::vec3& direction,
+        float outer_angle_deg,
+        float distance,
+        Vertex* out);
+
     struct GpuBuffer {
         VkBuffer buffer = VK_NULL_HANDLE;
         VmaAllocation allocation = VK_NULL_HANDLE;
@@ -83,4 +99,23 @@ namespace graphics {
     };
 
     VkPipeline createGraphicsPipeline(const PipelineConfig& config);
+
+    GpuBuffer createDeviceBuffer(size_t size, VkBufferUsageFlags usage);
+
+    GpuBuffer createBufferWithData(const void* data, size_t size, VkBufferUsageFlags usage);
+
+    void copyBuffer(VkBuffer src, VkBuffer dst, VkDeviceSize size);
+
+    void writeDynamicUniformBuffer(VkDescriptorSet set, VkBuffer buffer, size_t size, uint32_t binding = 0);
+
+    struct GpuTexture {
+        VkImage image = VK_NULL_HANDLE;
+        VmaAllocation allocation = VK_NULL_HANDLE;
+        VkImageView view = VK_NULL_HANDLE;
+        VkSampler sampler = VK_NULL_HANDLE;
+    };
+
+    GpuTexture loadTexture(const char* path);
+
+    void destroyTexture(GpuTexture& tex);
 } // namespace graphics

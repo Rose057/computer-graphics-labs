@@ -9,12 +9,13 @@ namespace application {
         glm::vec3 position;
         glm::vec3 color;
         glm::vec3 normal;
+        glm::vec2 uv;
     };
 
     bool initialize();
     void shutdown();
 
     void update(double time);
-    void render(const graphics::internal::FrameData& fd); 
+    void render(const graphics::internal::FrameData& fd);
 
 } // namespace application

@@ -3,10 +3,12 @@
 layout(location = 0) in vec3 in_position;
 layout(location = 1) in vec3 in_color;
 layout(location = 2) in vec3 in_normal;
+layout(location = 3) in vec2 in_uv; 
 
 layout(location = 0) out vec3 out_color;
 layout(location = 1) out vec3 out_normal;
 layout(location = 2) out vec3 out_world_position;
+layout(location = 3) out vec2 out_uv;  
 
 layout(std140, set = 0, binding = 0) uniform SceneUniforms {
     mat4 view_projection;
@@ -30,10 +32,10 @@ layout(std140, set = 1, binding = 0) uniform ModelUniform {
     float _padding0;
     vec3 specular;
     float alpha;
-    float is_gizmo;
     float _padding1;
     float _padding2;
     float _padding3;
+    float _padding4;
 } model_uniforms;
 
 void main() {
@@ -43,4 +45,5 @@ void main() {
     out_color = in_position + vec3(0.5, 0.5, 0.5);
     out_normal = mat3(transpose(inverse(model_uniforms.model))) * in_normal;
     out_world_position = world_pos.xyz;
+    out_uv = in_uv;
 }
