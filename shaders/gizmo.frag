@@ -1,4 +1,4 @@
-#version 450 core
+#version 450
 
 layout(location = 0) in vec3 in_color;
 layout(location = 1) in vec3 in_normal;
@@ -8,6 +8,7 @@ layout(location = 0) out vec4 out_color;
 
 layout(std140, set = 0, binding = 0) uniform SceneUniforms {
     mat4 view_projection;
+    mat4 shadow_projection;
     vec3 camera_position;
     float _padding0;
     vec3 directional_light_direction;

@@ -637,4 +637,242 @@ namespace graphics {
         }
         tex = {};
     }
+
+    GpuShadowMap createShadowMap(uint32_t size, VkFormat format) {
+        GpuShadowMap result;
+        result.format = format;
+        result.size = size;
+
+        const VkImageCreateInfo image_info = {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+            .imageType = VK_IMAGE_TYPE_2D,
+            .format = format,
+            .extent = { size, size, 1 },
+            .mipLevels = 1,
+            .arrayLayers = 1,
+            .samples = VK_SAMPLE_COUNT_1_BIT,
+            .tiling = VK_IMAGE_TILING_OPTIMAL,
+            .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+            .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+            .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+        };
+        const VmaAllocationCreateInfo alloc_info = {
+            .usage = VMA_MEMORY_USAGE_GPU_ONLY,
+        };
+        if (vmaCreateImage(internal::context.allocator,
+            &image_info, &alloc_info,
+            &result.image, &result.allocation, nullptr) != VK_SUCCESS) {
+            std::cerr << "Failed to create shadow map image\n";
+            return {};
+        }
+
+        const VkImageViewCreateInfo view_info = {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+            .image = result.image,
+            .viewType = VK_IMAGE_VIEW_TYPE_2D,
+            .format = format,
+            .subresourceRange = {
+                .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+                .baseMipLevel = 0,
+                .levelCount = 1,
+                .baseArrayLayer = 0,
+                .layerCount = 1,
+            },
+        };
+        if (vkCreateImageView(internal::context.device,
+            &view_info, nullptr, &result.view) != VK_SUCCESS) {
+            std::cerr << "Failed to create shadow map view\n";
+            vmaDestroyImage(internal::context.allocator, result.image, result.allocation);
+            return {};
+        }
+
+        const VkSamplerCreateInfo sampler_info = {
+            .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+            .magFilter = VK_FILTER_LINEAR,
+            .minFilter = VK_FILTER_LINEAR,
+            .mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST,
+            .addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
+            .addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
+            .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+            .compareEnable = VK_TRUE,
+            .compareOp = VK_COMPARE_OP_LESS,
+            .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE,
+        };
+        if (vkCreateSampler(internal::context.device,
+            &sampler_info, nullptr, &result.sampler) != VK_SUCCESS) {
+            std::cerr << "Failed to create shadow map sampler\n";
+            vkDestroyImageView(internal::context.device, result.view, nullptr);
+            vmaDestroyImage(internal::context.allocator, result.image, result.allocation);
+            return {};
+        }
+
+        return result;
+    }
+
+    void destroyShadowMap(GpuShadowMap& shadow) {
+        if (shadow.sampler != VK_NULL_HANDLE) {
+            vkDestroySampler(internal::context.device, shadow.sampler, nullptr);
+        }
+        if (shadow.view != VK_NULL_HANDLE) {
+            vkDestroyImageView(internal::context.device, shadow.view, nullptr);
+        }
+        if (shadow.image != VK_NULL_HANDLE) {
+            vmaDestroyImage(internal::context.allocator, shadow.image, shadow.allocation);
+        }
+        shadow = {};
+    }
+
+    VkPipeline createShadowPipeline(const ShadowPipelineConfig& config) {
+        const VkVertexInputBindingDescription binding = {
+            .binding = 0,
+            .stride = sizeof(Vertex),
+            .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
+        };
+        const VkVertexInputAttributeDescription attributes[] = {
+            {
+                .location = 0,
+                .binding = 0,
+                .format = VK_FORMAT_R32G32B32_SFLOAT,
+                .offset = offsetof(Vertex, position),
+            },
+        };
+        const VkPipelineVertexInputStateCreateInfo vertex_input = {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+            .vertexBindingDescriptionCount = 1,
+            .pVertexBindingDescriptions = &binding,
+            .vertexAttributeDescriptionCount = 1,
+            .pVertexAttributeDescriptions = attributes,
+        };
+
+        const VkPipelineInputAssemblyStateCreateInfo input_assembly = {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+            .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+        };
+
+        const VkPipelineViewportStateCreateInfo viewport_state = {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+            .viewportCount = 1,
+            .scissorCount = 1,
+        };
+
+        const VkPipelineRasterizationStateCreateInfo raster = {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+            .polygonMode = VK_POLYGON_MODE_FILL,
+            .cullMode = VK_CULL_MODE_NONE,
+            .frontFace = VK_FRONT_FACE_CLOCKWISE,
+            .depthBiasEnable = VK_TRUE,
+            .lineWidth = 1.0f,
+        };
+
+        const VkPipelineMultisampleStateCreateInfo multisample = {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+            .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+        };
+
+        const VkPipelineDepthStencilStateCreateInfo depth = {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+            .depthTestEnable = VK_TRUE,
+            .depthWriteEnable = VK_TRUE,
+            .depthCompareOp = VK_COMPARE_OP_LESS,
+        };
+
+        const VkPipelineColorBlendStateCreateInfo blend = {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+        };
+
+        const VkDynamicState dynamic_states[] = {
+            VK_DYNAMIC_STATE_VIEWPORT,
+            VK_DYNAMIC_STATE_SCISSOR,
+            VK_DYNAMIC_STATE_DEPTH_BIAS,
+        };
+        const VkPipelineDynamicStateCreateInfo dynamic = {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+            .dynamicStateCount = 3,
+            .pDynamicStates = dynamic_states,
+        };
+
+        const VkPipelineRenderingCreateInfo rendering_info = {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+            .colorAttachmentCount = 0,
+            .pColorAttachmentFormats = nullptr,
+            .depthAttachmentFormat = config.depthFormat,
+        };
+
+        const VkPipelineShaderStageCreateInfo stage = {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+            .stage = VK_SHADER_STAGE_VERTEX_BIT,
+            .module = config.vertexShader,
+            .pName = "main",
+        };
+
+        const VkGraphicsPipelineCreateInfo info = {
+            .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+            .pNext = &rendering_info,
+            .stageCount = 1,
+            .pStages = &stage,
+            .pVertexInputState = &vertex_input,
+            .pInputAssemblyState = &input_assembly,
+            .pViewportState = &viewport_state,
+            .pRasterizationState = &raster,
+            .pMultisampleState = &multisample,
+            .pDepthStencilState = &depth,
+            .pColorBlendState = &blend,
+            .pDynamicState = &dynamic,
+            .layout = config.layout,
+        };
+
+        VkPipeline pipeline = VK_NULL_HANDLE;
+        if (vkCreateGraphicsPipelines(internal::context.device,
+            VK_NULL_HANDLE, 1, &info, nullptr, &pipeline) != VK_SUCCESS) {
+            std::cerr << "Failed to create shadow pipeline\n";
+            return VK_NULL_HANDLE;
+        }
+
+        return pipeline;
+    }
+
+    void writeTexture(
+        VkDescriptorSet set,
+        VkImageView view,
+        VkSampler sampler,
+        uint32_t binding,
+        VkImageLayout layout) {
+
+        const VkDescriptorImageInfo image_info = {
+            .sampler = sampler,
+            .imageView = view,
+            .imageLayout = layout,
+        };
+
+        const VkWriteDescriptorSet write = {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = set,
+            .dstBinding = binding,
+            .dstArrayElement = 0,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .pImageInfo = &image_info,
+        };
+
+        vkUpdateDescriptorSets(internal::context.device, 1, &write, 0, nullptr);
+    }
+    VkFormat findDepthFormat() {
+        const VkFormat candidates[] = {
+            VK_FORMAT_D32_SFLOAT,
+            VK_FORMAT_D32_SFLOAT_S8_UINT,
+            VK_FORMAT_D24_UNORM_S8_UINT,
+        };
+
+        for (const auto& f : candidates) {
+            VkFormatProperties properties;
+            vkGetPhysicalDeviceFormatProperties(internal::context.physical_device, f, &properties);
+
+            if ((properties.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT)
+                && (properties.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT)) {
+                return f;
+            }
+        }
+
+        return VK_FORMAT_UNDEFINED;
+    }
 } // namespace graphics

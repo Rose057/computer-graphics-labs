@@ -18,6 +18,7 @@
 
 #include <fstream>
 #include <vector>
+#include <algorithm>
 
 #include <cmath>
 
@@ -25,6 +26,8 @@ namespace application {
 
     struct SceneUniforms {
         glm::mat4 view_projection;
+        glm::mat4 shadow_projection;
+        glm::mat4 spot_shadow_projection;
 
         glm::vec3 camera_position;
         float _padding0;
@@ -193,15 +196,20 @@ namespace application {
 
         bool global_effect_enabled = true;
 
+        constexpr uint32_t shadow_map_size = 2048;
+        graphics::GpuShadowMap shadow_map;
+        graphics::GpuShadowMap spot_shadow_map;
+
+        float shadow_ortho_size = 5.0f;
+        float shadow_depth_bias_constant = 1.25f;
+        float shadow_depth_bias_slope = 1.75f;
+
         uint32_t dynamic_ubo_alignment = 256;
         uint32_t model_uniform_stride = 0;
 
         constexpr uint32_t max_textures = 16;
         uint32_t texture_count = 0;
         graphics::GpuTexture textures[max_textures];
-
-        VkDescriptorSet vk_texture_descriptor_sets[max_textures] = {};
-        VkDescriptorSetLayout vk_texture_descriptor_set_layout = VK_NULL_HANDLE;
 
         uint32_t model_texture_index[object_count] = { 0, 1, 2, 3, 4, 4 };
 
@@ -296,6 +304,14 @@ namespace application {
 
         graphics::GpuBuffer point_lights_sb;
         graphics::GpuBuffer spot_lights_sb;
+
+        graphics::GpuBuffer shadow_uniform_buffer;
+        glm::mat4* shadow_uniform_buffer_mapped = nullptr;
+        glm::mat4 shadow_projection = glm::mat4(1.0f);
+
+        graphics::GpuBuffer spot_shadow_uniform_buffer;
+        glm::mat4* spot_shadow_uniform_buffer_mapped = nullptr;
+        glm::mat4 spot_shadow_projection = glm::mat4(1.0f);
 
         void computeVertexNormals(std::vector<Vertex>& vertices,
             std::vector<uint32_t>& indices) {
@@ -453,6 +469,8 @@ namespace application {
             vk_scene_uniform_buffer_mapped = static_cast<SceneUniforms*>(scene_ub.mapped);
 
             vk_scene_uniform_buffer_mapped->view_projection = glm::mat4(1.0f);
+            vk_scene_uniform_buffer_mapped->shadow_projection = glm::mat4(1.0f);
+            vk_scene_uniform_buffer_mapped->spot_shadow_projection = glm::mat4(1.0f);
             vk_scene_uniform_buffer_mapped->camera_position = glm::vec3(0.0f);
             vk_scene_uniform_buffer_mapped->_padding0 = 0.0f;
             vk_scene_uniform_buffer_mapped->directional_light_direction = glm::vec3(0.0f, -1.0f, -0.3f);
@@ -575,16 +593,67 @@ namespace application {
         VkDescriptorSetLayout vk_scene_descriptor_set_layout = VK_NULL_HANDLE;
         VkDescriptorSetLayout vk_model_descriptor_set_layout = VK_NULL_HANDLE;
         VkDescriptorSetLayout vk_gizmo_descriptor_set_layout = VK_NULL_HANDLE;
+        VkDescriptorSetLayout vk_texture_descriptor_set_layout = VK_NULL_HANDLE;
+        VkDescriptorSetLayout shadow_descriptor_set_layout = VK_NULL_HANDLE;
         VkDescriptorPool vk_descriptor_pool = VK_NULL_HANDLE;
         VkDescriptorSet vk_scene_descriptor_set = VK_NULL_HANDLE;
         VkDescriptorSet vk_point_gizmo_descriptor_sets[max_point_lights] = {};
         VkDescriptorSet vk_spot_gizmo_descriptor_sets[max_spot_lights] = {};
         VkDescriptorSet vk_cone_descriptor_set = VK_NULL_HANDLE;
+        VkDescriptorSet vk_texture_descriptor_sets[max_textures] = {};
+        VkDescriptorSet shadow_descriptor_set = VK_NULL_HANDLE;
+        VkDescriptorSet spot_shadow_descriptor_set = VK_NULL_HANDLE;
         VkPipelineLayout vk_pipeline_layout = VK_NULL_HANDLE;
         VkPipelineLayout vk_gizmo_pipeline_layout = VK_NULL_HANDLE;
+        VkPipelineLayout shadow_pipeline_layout = VK_NULL_HANDLE;
         VkPipeline vk_pipeline = VK_NULL_HANDLE;
         VkPipeline vk_line_pipeline = VK_NULL_HANDLE;
         VkPipeline vk_gizmo_pipeline = VK_NULL_HANDLE;
+        VkPipeline shadow_pipeline = VK_NULL_HANDLE;
+
+        bool createShadowDescriptors() {
+            shadow_uniform_buffer = graphics::createUniformBuffer<glm::mat4>();
+            if (shadow_uniform_buffer.buffer == VK_NULL_HANDLE) return false;
+            shadow_uniform_buffer_mapped = static_cast<glm::mat4*>(shadow_uniform_buffer.mapped);
+
+            shadow_descriptor_set_layout = graphics::createDescriptorSetLayout({
+                {
+                    .binding = 0,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                    .descriptorCount = 1,
+                    .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+                },
+                });
+            if (shadow_descriptor_set_layout == VK_NULL_HANDLE) return false;
+
+            shadow_descriptor_set = graphics::allocateDescriptorSet(
+                vk_descriptor_pool, shadow_descriptor_set_layout);
+
+            graphics::writeUniformBuffer(
+                shadow_descriptor_set,
+                shadow_uniform_buffer.buffer,
+                sizeof(glm::mat4), 0);
+
+            return true;
+        }
+
+        bool createSpotShadowDescriptors() {
+            spot_shadow_uniform_buffer = graphics::createUniformBuffer<glm::mat4>();
+            if (spot_shadow_uniform_buffer.buffer == VK_NULL_HANDLE) return false;
+            spot_shadow_uniform_buffer_mapped = static_cast<glm::mat4*>(spot_shadow_uniform_buffer.mapped);
+            *spot_shadow_uniform_buffer_mapped = glm::mat4(1.0f);
+
+            spot_shadow_descriptor_set = graphics::allocateDescriptorSet(
+                vk_descriptor_pool, shadow_descriptor_set_layout);
+            if (spot_shadow_descriptor_set == VK_NULL_HANDLE) return false;
+
+            graphics::writeUniformBuffer(
+                spot_shadow_descriptor_set,
+                spot_shadow_uniform_buffer.buffer,
+                sizeof(glm::mat4), 0);
+
+            return true;
+        }
 
         bool createDescriptors() {
             vk_scene_descriptor_set_layout = graphics::createDescriptorSetLayout({
@@ -603,6 +672,18 @@ namespace application {
                 {
                     .binding = 2,
                     .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                    .descriptorCount = 1,
+                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                },
+                {
+                    .binding = 3,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                    .descriptorCount = 1,
+                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                },
+                {
+                    .binding = 4,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                     .descriptorCount = 1,
                     .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
                 },
@@ -692,7 +773,7 @@ namespace application {
             vk_descriptor_pool = graphics::createDescriptorPool({
                 {
                     .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                    .descriptorCount = 2 + max_point_lights + max_spot_lights,
+                    .descriptorCount = 5 + max_point_lights + max_spot_lights,
                 },
                 {
                     .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
@@ -706,7 +787,7 @@ namespace application {
                     .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                     .descriptorCount = max_textures * 3,
                 },
-                }, 6 + max_point_lights + max_spot_lights + max_textures * 3);
+                }, 8 + max_point_lights + max_spot_lights + max_textures * 3);
 
             vk_scene_descriptor_set = graphics::allocateDescriptorSet(vk_descriptor_pool, vk_scene_descriptor_set_layout);
 
@@ -808,6 +889,9 @@ namespace application {
             graphics::writeStorageBuffer(vk_scene_descriptor_set, point_lights_sb.buffer, 1);
             graphics::writeStorageBuffer(vk_scene_descriptor_set, spot_lights_sb.buffer, 2);
 
+            graphics::writeTexture(vk_scene_descriptor_set, shadow_map.view, shadow_map.sampler, 3);
+            graphics::writeTexture(vk_scene_descriptor_set, spot_shadow_map.view, spot_shadow_map.sampler, 4);
+
             graphics::writeDynamicUniformBuffer(vk_model_descriptor_set, model_ubo.buffer, model_uniform_stride, 0);
 
             for (uint32_t i = 0; i < max_point_lights; ++i)
@@ -892,6 +976,36 @@ namespace application {
         }
     } // namespace
 
+    bool createShadowPipeline() {
+        VkShaderModule shadow_vert = graphics::loadShader("shaders/shadow.vert.spv");
+        if (shadow_vert == VK_NULL_HANDLE) return false;
+
+        const VkDescriptorSetLayout set_layouts[] = {
+            shadow_descriptor_set_layout,
+            vk_model_descriptor_set_layout,
+        };
+        const VkPipelineLayoutCreateInfo layout_info = {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+            .setLayoutCount = 2,
+            .pSetLayouts = set_layouts,
+        };
+        if (vkCreatePipelineLayout(graphics::internal::context.device,
+            &layout_info, nullptr, &shadow_pipeline_layout) != VK_SUCCESS) {
+            vkDestroyShaderModule(graphics::internal::context.device, shadow_vert, nullptr);
+            return false;
+        }
+
+        graphics::ShadowPipelineConfig config = {};
+        config.vertexShader = shadow_vert;
+        config.layout = shadow_pipeline_layout;
+        config.depthFormat = shadow_map.format;
+
+        shadow_pipeline = graphics::createShadowPipeline(config);
+
+        vkDestroyShaderModule(graphics::internal::context.device, shadow_vert, nullptr);
+        return shadow_pipeline != VK_NULL_HANDLE;
+    }
+
     bool initialize() {
         if (!queryDynamicUboAlignment()) {
             return false;
@@ -922,7 +1036,31 @@ namespace application {
         if (!loadAllTextures()) {
             return false;
         }
+        const VkFormat depth_format = graphics::findDepthFormat();
+        if (depth_format == VK_FORMAT_UNDEFINED) {
+            std::cerr << "Failed to find supported depth format for shadow maps\n";
+            return false;
+        }
+
+        shadow_map = graphics::createShadowMap(shadow_map_size, depth_format);
+        if (shadow_map.image == VK_NULL_HANDLE) {
+            return false;
+        }
+
+        spot_shadow_map = graphics::createShadowMap(shadow_map_size, depth_format);
+        if (spot_shadow_map.image == VK_NULL_HANDLE) {
+            return false;
+        }
         if (!createDescriptors()) {
+            return false;
+        }
+        if (!createShadowDescriptors()) {
+            return false;
+        }
+        if (!createSpotShadowDescriptors()) {
+            return false;
+        }
+        if (!createShadowPipeline()) {
             return false;
         }
         if (!createPipeline()) {
@@ -983,6 +1121,24 @@ namespace application {
         for (uint32_t i = 0; i < texture_count; ++i) {
             graphics::destroyTexture(textures[i]);
         }
+        graphics::destroyShadowMap(shadow_map);
+        if (shadow_pipeline != VK_NULL_HANDLE) {
+            vkDestroyPipeline(context.device, shadow_pipeline, nullptr);
+            shadow_pipeline = VK_NULL_HANDLE;
+        }
+        if (shadow_pipeline_layout != VK_NULL_HANDLE) {
+            vkDestroyPipelineLayout(context.device, shadow_pipeline_layout, nullptr);
+            shadow_pipeline_layout = VK_NULL_HANDLE;
+        }
+        if (shadow_descriptor_set_layout != VK_NULL_HANDLE) {
+            vkDestroyDescriptorSetLayout(context.device, shadow_descriptor_set_layout, nullptr);
+            shadow_descriptor_set_layout = VK_NULL_HANDLE;
+        }
+        graphics::destroyBuffer(shadow_uniform_buffer);
+
+        graphics::destroyShadowMap(spot_shadow_map);
+        graphics::destroyBuffer(spot_shadow_uniform_buffer);
+
         graphics::destroyBuffer(floor_vb);
         graphics::destroyBuffer(floor_ib);
         graphics::destroyBuffer(wall_vb);
@@ -1009,15 +1165,15 @@ namespace application {
         const float aspect = float(extent.width) / float(extent.height);
 
         static glm::vec3 camera_position = glm::vec3(4.649f, 1.964f, 3.885f);
-        static float camera_yaw = -136.0f;
+        static float camera_yaw = -138.8f;
 
         static float camera_pitch = -7.3f;
         static float camera_fov = 40.0f;
 
-        static glm::vec3 directional_light_direction = glm::vec3(-0.2f, -1.0f, 0.3f);
-        static glm::vec3 directional_light_color = glm::vec3(0.2f, 0.3f, 0.5f);
-        static float directional_light_intensity = 0.3f;
-        static glm::vec3 ambient_light = glm::vec3(0.02f, 0.03f, 0.06f);
+        static glm::vec3 directional_light_direction = glm::vec3(-0.55f, -0.176f, -1.0f);
+        static glm::vec3 directional_light_color = glm::vec3(0.9f, 0.68f, 0.27f);
+        static float directional_light_intensity = 0.7f;
+        static glm::vec3 ambient_light = glm::vec3(0.18f, 0.18f, 0.18f);
 
         static glm::vec3 albedo = glm::vec3(1.0f, 1.0f, 1.0f);
         static glm::vec3 specular = glm::vec3(0.8f, 0.8f, 0.8f);
@@ -1053,27 +1209,13 @@ namespace application {
 
         static bool lights_initialized = false;
         if (!lights_initialized) {
-            point_light_count = 3;
-
-            cpu_point_lights[0].position = manual_position[0] + glm::vec3(0.8f, 2.388f, 0.4f);
-            cpu_point_lights[0].color = glm::vec3(0.6f, 0.2f, 0.9f);
-            cpu_point_lights[0].intensity = 2.3f;
-
-            cpu_point_lights[1].position = manual_position[1] + glm::vec3(0.0f, 1.5f, 0.385f);
-            cpu_point_lights[1].color = glm::vec3(0.2f, 0.8f, 0.3f);
-            cpu_point_lights[1].intensity = 2.3f;
-
-            cpu_point_lights[2].position = manual_position[2] + glm::vec3(0.0f, 1.8f, 0.0f);
-            cpu_point_lights[2].color = glm::vec3(0.2f, 0.7f, 0.9f);
-            cpu_point_lights[2].intensity = 2.3f;
-
             spot_light_count = 1;
-            cpu_spot_lights[0].position = glm::vec3(0.0f, 5.0f, 0.0f);
-            cpu_spot_lights[0].direction = glm::vec3(0.0f, -1.0f, 0.0f);
-            cpu_spot_lights[0].color = glm::vec3(0.06f, 0.06f, 0.96f);
-            cpu_spot_lights[0].intensity = 10.0f;
-            cpu_spot_lights[0].inner_angle_deg = 20.0f;
-            cpu_spot_lights[0].outer_angle_deg = 35.0f;
+            cpu_spot_lights[0].position = glm::vec3(1.53f, 1.11f, 3.97f);
+            cpu_spot_lights[0].direction = glm::vec3(-0.31f, -0.14f, -0.94f);
+            cpu_spot_lights[0].color = glm::vec3(1.0f, 1.0f, 1.0f);
+            cpu_spot_lights[0].intensity = 20.0f;
+            cpu_spot_lights[0].inner_angle_deg = 22.0f;
+            cpu_spot_lights[0].outer_angle_deg = 43.0f;
             cpu_spot_lights[0].inner_cosine = std::cos(glm::radians(cpu_spot_lights[0].inner_angle_deg));
             cpu_spot_lights[0].outer_cosine = std::cos(glm::radians(cpu_spot_lights[0].outer_angle_deg));
 
@@ -1116,6 +1258,12 @@ namespace application {
         ImGui::ColorEdit3("Albedo", &albedo.x);
         ImGui::ColorEdit3("Specular", &specular.x);
         ImGui::SliderFloat("Alpha", &alpha, 1.0f, 512.0f);
+
+        ImGui::Separator();
+        ImGui::Text("Shadow Settings:");
+        ImGui::SliderFloat("Ortho Size", &shadow_ortho_size, 1.0f, 100.0f);
+        ImGui::SliderFloat("Depth Bias Constant", &shadow_depth_bias_constant, 0.0f, 5000.0f);
+        ImGui::SliderFloat("Depth Bias Slope", &shadow_depth_bias_slope, 0.0f, 100.0f);
 
         ImGui::Separator();
         ImGui::Text("Point Lights (%u / %u):", point_light_count, max_point_lights);
@@ -1400,7 +1548,59 @@ namespace application {
             vk_spot_lights_buffer_mapped[i] = cpu_spot_lights[i];
         }
 
+        glm::vec3 sun_direction = glm::normalize(-directional_light_direction);
+        glm::vec3 light_target = glm::vec3(0.0f, 0.0f, 0.0f);
+        glm::vec3 sun_position = light_target + sun_direction * 25.0f;
+
+        glm::mat4 light_view = glm::lookAt(
+            sun_position,
+            light_target,
+            glm::vec3(0.0f, 1.0f, 0.0f)
+        );
+
+        glm::mat4 light_proj = glm::ortho(
+            -shadow_ortho_size, shadow_ortho_size,
+            -shadow_ortho_size, shadow_ortho_size,
+            0.1f, 50.0f
+        );
+
+        light_proj[1][1] *= -1.0f;
+        shadow_projection = light_proj * light_view;
+
+        *shadow_uniform_buffer_mapped = shadow_projection;
+
+        if (spot_light_count > 0) {
+            const SpotLight& main_spot = cpu_spot_lights[0];
+            glm::vec3 spot_pos = main_spot.position;
+            glm::vec3 spot_dir = glm::normalize(main_spot.direction);
+            glm::vec3 spot_target = spot_pos + spot_dir;
+
+            glm::vec3 up_vec = (std::abs(spot_dir.y) > 0.99f)
+                ? glm::vec3(0.0f, 0.0f, 1.0f)
+                : glm::vec3(0.0f, 1.0f, 0.0f);
+
+            glm::mat4 spot_view = glm::lookAt(spot_pos, spot_target, up_vec);
+
+            float fov_deg = std::clamp(main_spot.outer_angle_deg * 2.0f, 10.0f, 150.0f);
+            glm::mat4 spot_proj = glm::perspective(
+                glm::radians(fov_deg),
+                1.0f,
+                0.2f,
+                30.0f
+            );
+            spot_proj[1][1] *= -1.0f;
+
+            spot_shadow_projection = spot_proj * spot_view;
+        }
+        else {
+            spot_shadow_projection = glm::mat4(1.0f);
+        }
+
+        *spot_shadow_uniform_buffer_mapped = spot_shadow_projection;
+
         vk_scene_uniform_buffer_mapped->view_projection = view_projection;
+        vk_scene_uniform_buffer_mapped->shadow_projection = shadow_projection;
+        vk_scene_uniform_buffer_mapped->spot_shadow_projection = spot_shadow_projection;
         vk_scene_uniform_buffer_mapped->camera_position = camera_position;
         if (glm::length(directional_light_direction) < 0.001f) {
             vk_scene_uniform_buffer_mapped->directional_light_direction = glm::vec3(0.0f, -1.0f, 0.0f);
@@ -1469,6 +1669,218 @@ namespace application {
         };
 
         vkBeginCommandBuffer(fd.command_buffer, &command_buffer_begin);
+
+        {
+            const VkImageMemoryBarrier barrier = {
+                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                .srcAccessMask = 0,
+                .dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                .newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                .image = shadow_map.image,
+                .subresourceRange = {
+                    .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+                    .baseMipLevel = 0,
+                    .levelCount = 1,
+                    .baseArrayLayer = 0,
+                    .layerCount = 1,
+                },
+            };
+            vkCmdPipelineBarrier(fd.command_buffer,
+                VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+                VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+                0, 0, nullptr, 0, nullptr, 1, &barrier);
+        }
+
+        {
+            const VkRenderingAttachmentInfo depth_attachment = {
+                .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+                .imageView = shadow_map.view,
+                .imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+                .clearValue = {.depthStencil = { 1.0f, 0 } },
+            };
+            const VkRenderingInfo rendering_info = {
+                .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+                .renderArea = {.offset = {0, 0}, .extent = { shadow_map_size, shadow_map_size } },
+                .layerCount = 1,
+                .colorAttachmentCount = 0,
+                .pColorAttachments = nullptr,
+                .pDepthAttachment = &depth_attachment,
+                .pStencilAttachment = nullptr,
+            };
+            vkCmdBeginRendering(fd.command_buffer, &rendering_info);
+
+            const VkViewport shadow_viewport = {
+                .x = 0.0f, .y = 0.0f,
+                .width = float(shadow_map_size),
+                .height = float(shadow_map_size),
+                .minDepth = 0.0f, .maxDepth = 1.0f,
+            };
+            vkCmdSetViewport(fd.command_buffer, 0, 1, &shadow_viewport);
+
+            const VkRect2D shadow_scissor = {
+                .offset = {0, 0},
+                .extent = { shadow_map_size, shadow_map_size },
+            };
+            vkCmdSetScissor(fd.command_buffer, 0, 1, &shadow_scissor);
+
+            vkCmdBindPipeline(fd.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, shadow_pipeline);
+
+            vkCmdSetDepthBias(fd.command_buffer,
+                shadow_depth_bias_constant, 0.0f, shadow_depth_bias_slope);
+
+            vkCmdBindDescriptorSets(fd.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                shadow_pipeline_layout, 0, 1, &shadow_descriptor_set, 0, nullptr);
+
+            {
+                const VkDeviceSize offset = 0;
+                vkCmdBindVertexBuffers(fd.command_buffer, 0, 1, &pyramid_vb.buffer, &offset);
+                vkCmdBindIndexBuffer(fd.command_buffer, pyramid_ib.buffer, 0, VK_INDEX_TYPE_UINT32);
+                for (uint32_t i = 0; i < 3; ++i) {
+                    uint32_t dynamic_offset = i * model_uniform_stride;
+                    vkCmdBindDescriptorSets(fd.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                        shadow_pipeline_layout, 1, 1, &vk_model_descriptor_set, 1, &dynamic_offset);
+                    vkCmdDrawIndexed(fd.command_buffer, static_cast<uint32_t>(pyramid_indices.size()), 1, 0, 0, 0);
+                }
+            }
+
+
+            vkCmdEndRendering(fd.command_buffer);
+        }
+
+        {
+            const VkImageMemoryBarrier barrier = {
+                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                .srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+                .oldLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                .image = shadow_map.image,
+                .subresourceRange = {
+                    .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+                    .baseMipLevel = 0,
+                    .levelCount = 1,
+                    .baseArrayLayer = 0,
+                    .layerCount = 1,
+                },
+            };
+            vkCmdPipelineBarrier(fd.command_buffer,
+                VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                0, 0, nullptr, 0, nullptr, 1, &barrier);
+        }
+
+        if (spot_light_count > 0) {
+            {
+                const VkImageMemoryBarrier barrier = {
+                    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                    .srcAccessMask = 0,
+                    .dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                    .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                    .newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                    .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                    .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                    .image = spot_shadow_map.image,
+                    .subresourceRange = {
+                        .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+                        .baseMipLevel = 0,
+                        .levelCount = 1,
+                        .baseArrayLayer = 0,
+                        .layerCount = 1,
+                    },
+                };
+                vkCmdPipelineBarrier(fd.command_buffer,
+                    VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+                    VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+                    0, 0, nullptr, 0, nullptr, 1, &barrier);
+            }
+
+            {
+                const VkRenderingAttachmentInfo depth_attachment = {
+                    .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+                    .imageView = spot_shadow_map.view,
+                    .imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                    .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                    .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+                    .clearValue = {.depthStencil = { 1.0f, 0 } },
+                };
+                const VkRenderingInfo rendering_info = {
+                    .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+                    .renderArea = {.offset = {0, 0}, .extent = { shadow_map_size, shadow_map_size } },
+                    .layerCount = 1,
+                    .colorAttachmentCount = 0,
+                    .pColorAttachments = nullptr,
+                    .pDepthAttachment = &depth_attachment,
+                    .pStencilAttachment = nullptr,
+                };
+                vkCmdBeginRendering(fd.command_buffer, &rendering_info);
+
+                const VkViewport shadow_viewport = {
+                    .x = 0.0f, .y = 0.0f,
+                    .width = float(shadow_map_size),
+                    .height = float(shadow_map_size),
+                    .minDepth = 0.0f, .maxDepth = 1.0f,
+                };
+                vkCmdSetViewport(fd.command_buffer, 0, 1, &shadow_viewport);
+
+                const VkRect2D shadow_scissor = {
+                    .offset = {0, 0},
+                    .extent = { shadow_map_size, shadow_map_size },
+                };
+                vkCmdSetScissor(fd.command_buffer, 0, 1, &shadow_scissor);
+
+                vkCmdBindPipeline(fd.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, shadow_pipeline);
+                vkCmdSetDepthBias(fd.command_buffer,
+                    shadow_depth_bias_constant, 0.0f, shadow_depth_bias_slope);
+
+                vkCmdBindDescriptorSets(fd.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                    shadow_pipeline_layout, 0, 1, &spot_shadow_descriptor_set, 0, nullptr);
+
+                {
+                    const VkDeviceSize offset = 0;
+                    vkCmdBindVertexBuffers(fd.command_buffer, 0, 1, &pyramid_vb.buffer, &offset);
+                    vkCmdBindIndexBuffer(fd.command_buffer, pyramid_ib.buffer, 0, VK_INDEX_TYPE_UINT32);
+                    for (uint32_t i = 0; i < 3; ++i) {
+                        uint32_t dynamic_offset = i * model_uniform_stride;
+                        vkCmdBindDescriptorSets(fd.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            shadow_pipeline_layout, 1, 1, &vk_model_descriptor_set, 1, &dynamic_offset);
+                        vkCmdDrawIndexed(fd.command_buffer, static_cast<uint32_t>(pyramid_indices.size()), 1, 0, 0, 0);
+                    }
+                }
+
+                vkCmdEndRendering(fd.command_buffer);
+            }
+
+            {
+                const VkImageMemoryBarrier barrier = {
+                    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                    .srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                    .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+                    .oldLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                    .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                    .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                    .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                    .image = spot_shadow_map.image,
+                    .subresourceRange = {
+                        .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+                        .baseMipLevel = 0,
+                        .levelCount = 1,
+                        .baseArrayLayer = 0,
+                        .layerCount = 1,
+                    },
+                };
+                vkCmdPipelineBarrier(fd.command_buffer,
+                    VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+                    VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                    0, 0, nullptr, 0, nullptr, 1, &barrier);
+            }
+        }
 
         const VkClearValue clear_values[] = {
             {.color = {.float32 = { 0.1f, 0.1f, 0.1f, 1.0f } } },

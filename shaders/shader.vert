@@ -1,4 +1,4 @@
-#version 450 core
+#version 450
 
 layout(location = 0) in vec3 in_position;
 layout(location = 1) in vec3 in_color;
@@ -9,9 +9,13 @@ layout(location = 0) out vec3 out_color;
 layout(location = 1) out vec3 out_normal;
 layout(location = 2) out vec3 out_world_position;
 layout(location = 3) out vec2 out_uv;  
+layout(location = 4) out vec4 out_shadow_position;
+layout(location = 5) out vec4 out_spot_shadow_position;
 
 layout(std140, set = 0, binding = 0) uniform SceneUniforms {
     mat4 view_projection;
+    mat4 shadow_projection;
+    mat4 spot_shadow_projection;
     vec3 camera_position;
     float _padding0;
     vec3 directional_light_direction;
@@ -46,4 +50,6 @@ void main() {
     out_normal = mat3(transpose(inverse(model_uniforms.model))) * in_normal;
     out_world_position = world_pos.xyz;
     out_uv = in_uv;
+    out_shadow_position = scene_uniforms.shadow_projection * world_pos;
+    out_spot_shadow_position = scene_uniforms.spot_shadow_projection * world_pos;
 }

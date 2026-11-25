@@ -118,4 +118,33 @@ namespace graphics {
     GpuTexture loadTexture(const char* path);
 
     void destroyTexture(GpuTexture& tex);
+
+    struct GpuShadowMap {
+        VkImage image = VK_NULL_HANDLE;
+        VmaAllocation allocation = VK_NULL_HANDLE;
+        VkImageView view = VK_NULL_HANDLE;
+        VkSampler sampler = VK_NULL_HANDLE;
+        VkFormat format = VK_FORMAT_D32_SFLOAT;
+        uint32_t size = 0;
+    };
+
+    GpuShadowMap createShadowMap(uint32_t size, VkFormat format = VK_FORMAT_D32_SFLOAT);
+
+    void destroyShadowMap(GpuShadowMap& shadow);
+
+    struct ShadowPipelineConfig {
+        VkShaderModule vertexShader = VK_NULL_HANDLE;
+        VkPipelineLayout layout = VK_NULL_HANDLE;
+        VkFormat depthFormat = VK_FORMAT_D32_SFLOAT;
+    };
+
+    VkPipeline createShadowPipeline(const ShadowPipelineConfig& config);
+
+    void writeTexture(
+        VkDescriptorSet set,
+        VkImageView view,
+        VkSampler sampler,
+        uint32_t binding,
+        VkImageLayout layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    VkFormat findDepthFormat();
 } // namespace graphics
