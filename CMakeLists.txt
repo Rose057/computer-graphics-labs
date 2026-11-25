@@ -118,7 +118,8 @@ if(GLSLC_FOUND)
 
 	compile_shader(shader.vert)
 	compile_shader(shader.frag)
-	compile_shader(gizmo.frag) 
+	compile_shader(gizmo.frag)
+	compile_shader(shadow.vert)
 
 	add_custom_target(shaders DEPENDS ${_SHADER_BINARIES})
 	add_dependencies(${PROJECT_NAME} shaders)

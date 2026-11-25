@@ -1,14 +1,18 @@
-#version 450 core
+#version 450
 
 layout(location = 0) in vec3 in_color;
 layout(location = 1) in vec3 in_normal;
 layout(location = 2) in vec3 in_world_position;
 layout(location = 3) in vec2 in_uv;
+layout(location = 4) in vec4 in_shadow_position;
+layout(location = 5) in vec4 in_spot_shadow_position;
 
 layout(location = 0) out vec4 out_color;
 
 layout(std140, set = 0, binding = 0) uniform SceneUniforms {
     mat4 view_projection;
+    mat4 shadow_projection;
+    mat4 spot_shadow_projection;
     vec3 camera_position;
     float _padding0;
     vec3 directional_light_direction;
@@ -62,6 +66,10 @@ struct SpotLight {
 layout(std430, set = 0, binding = 2) readonly buffer SpotLights {
     SpotLight spot_lights[];
 };
+
+layout(set = 0, binding = 3) uniform sampler2DShadow shadow_map;
+
+layout(set = 0, binding = 4) uniform sampler2DShadow spot_shadow_map;
 
 layout(set = 2, binding = 0) uniform sampler2D albedo_texture;
 layout(set = 2, binding = 1) uniform sampler2D specular_texture;
@@ -124,6 +132,30 @@ void main() {
         texel = texture(albedo_texture, in_uv);
     }
 
+    vec3 proj_coords = in_shadow_position.xyz / in_shadow_position.w;
+    proj_coords.xy = proj_coords.xy * 0.5 + 0.5;
+    proj_coords.z -= 0.001;
+
+    float shadow = 1.0;
+        if (proj_coords.x >= 0.0 && proj_coords.x <= 1.0 &&
+        proj_coords.y >= 0.0 && proj_coords.y <= 1.0 &&
+        proj_coords.z >= 0.0 && proj_coords.z <= 1.0) {
+            shadow = texture(shadow_map, proj_coords);
+    }
+
+    float spot_shadow = 1.0;
+    if (in_spot_shadow_position.w > 0.0001) {
+        vec3 spot_proj_coords = in_spot_shadow_position.xyz / in_spot_shadow_position.w;
+        spot_proj_coords.xy = spot_proj_coords.xy * 0.5 + 0.5;
+        spot_proj_coords.z -= 0.001;
+
+        if (spot_proj_coords.x >= 0.0 && spot_proj_coords.x <= 1.0 &&
+            spot_proj_coords.y >= 0.0 && spot_proj_coords.y <= 1.0 &&
+            spot_proj_coords.z >= 0.0 && spot_proj_coords.z <= 1.0) {
+            spot_shadow = texture(spot_shadow_map, spot_proj_coords);
+        }
+    }
+
     vec3 N = normalize(in_normal);
     vec3 V = normalize(scene_uniforms.camera_position - in_world_position);
     vec3 material_albedo = model_uniforms.albedo * texel.rgb;
@@ -136,11 +168,11 @@ void main() {
         float NdotH_dir = max(dot(N, H_dir), 0.0);
         vec3 diffuse_dir = scene_uniforms.directional_light_color
                          * scene_uniforms.directional_light_intensity
-                         * material_albedo * NdotL_dir;
+                         * material_albedo * NdotL_dir * shadow;
         vec3 specular_dir = scene_uniforms.directional_light_color
                           * scene_uniforms.directional_light_intensity
                           * (model_uniforms.specular * texel_specular)
-                          * pow(NdotH_dir, model_uniforms.alpha);
+                          * pow(NdotH_dir, model_uniforms.alpha) * shadow;
         final_color += diffuse_dir + specular_dir;
     }
 
@@ -179,10 +211,10 @@ void main() {
             float NdotH = max(dot(N, H), 0.0);
             float attenuation = light.intensity / distance_squared;
             vec3 diffuse = light.color * material_albedo * NdotL
-                         * attenuation * spot_intensity;
+                         * attenuation * spot_intensity * spot_shadow;
             vec3 specular = light.color * (model_uniforms.specular * texel_specular)
                           * pow(NdotH, model_uniforms.alpha)
-                          * attenuation * spot_intensity;
+                          * attenuation * spot_intensity * spot_shadow;
             final_color += diffuse + specular;
         }
     }
